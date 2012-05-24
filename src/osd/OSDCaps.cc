@@ -20,37 +20,37 @@ CapMap::~CapMap()
 {
 }
 
-void PoolsMap::dump()
+void PoolsMap::dump() const
 {
-  map<string, OSDCap>::iterator it;
+  map<string, OSDCap>::const_iterator it;
   for (it = pools_map.begin(); it != pools_map.end(); ++it) {
     generic_dout(0) << it->first << " -> (" << (int)it->second.allow << "." << (int)it->second.deny << ")" << dendl;
   }
 }
 
-void PoolsMap::apply_caps(string& name, int& cap)
+void PoolsMap::apply_caps(const string& name, int& cap) const
 {
-  map<string, OSDCap>::iterator iter;
+  map<string, OSDCap>::const_iterator iter;
 
   if ((iter = pools_map.find(name)) != pools_map.end()) {
-    OSDCap& c = iter->second;
+    const OSDCap& c = iter->second;
     cap |= c.allow;
     cap &= ~c.deny;
   }
 }
 
-void AuidMap::apply_caps(uint64_t uid, int& cap)
+void AuidMap::apply_caps(const uint64_t uid, int& cap) const
 {
-  map<uint64_t, OSDCap>::iterator iter;
+  map<uint64_t, OSDCap>::const_iterator iter;
 
   if ((iter = auid_map.find(uid)) != auid_map.end()) {
-    OSDCap& auid_cap = iter->second;
+    const OSDCap& auid_cap = iter->second;
     cap |= auid_cap.allow;
     cap &= ~auid_cap.deny;
   }
 }
 
-bool OSDCaps::get_next_token(string s, size_t& pos, string& token)
+bool OSDCaps::get_next_token(const string s, size_t& pos, string& token) const
 {
   int start = s.find_first_not_of(" \t", pos);
   int end;
@@ -76,7 +76,7 @@ bool OSDCaps::get_next_token(string s, size_t& pos, string& token)
   return true;
 }
 
-bool OSDCaps::is_rwx(string& token, rwx_t& cap_val)
+bool OSDCaps::is_rwx(string& token, rwx_t& cap_val) const
 {
   const char *t = token.c_str();
   int val = 0;
@@ -232,7 +232,8 @@ do { \
  * If these two steps haven't given you explicit caps
  * on the pool, check if you're the pool owner and grant full.
  */
-int OSDCaps::get_pool_cap(string& pool_name, uint64_t uid)
+int OSDCaps::get_pool_cap(const string& pool_name,
+                          uint64_t uid) const
 {
   if (allow_all)
     return OSD_CAP_ALL;

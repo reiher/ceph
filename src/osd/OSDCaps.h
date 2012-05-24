@@ -41,27 +41,27 @@ static inline ostream& operator<<(ostream& out, const OSDCap& pc) {
 
 struct CapMap {
   virtual ~CapMap();
-  virtual OSDCap& get_cap(string& name) = 0;
+  virtual OSDCap& get_cap(const string& name) = 0;
 };
 
 struct PoolsMap : public CapMap {
   map<string, OSDCap> pools_map;
 
-  OSDCap& get_cap(string& name) { return pools_map[name]; }
+  OSDCap& get_cap(const string& name) { return pools_map[name]; }
 
-  void dump();
-  void apply_caps(string& name, int& cap);
+  void dump() const;
+  void apply_caps(const string& name, int& cap) const;
 };
 
 struct AuidMap : public CapMap {
   map<uint64_t, OSDCap> auid_map;
 
-  OSDCap& get_cap(string& name) {
+  OSDCap& get_cap(const string& name) {
     uint64_t num = strtoll(name.c_str(), NULL, 10);
     return auid_map[num];
   }
 
-  void apply_caps(uint64_t uid, int& cap);
+  void apply_caps(const uint64_t uid, int& cap) const;
 };
 
 struct OSDCaps {
@@ -79,16 +79,17 @@ struct OSDCaps {
   int peer_type;
   uint64_t auid;
 
-  bool get_next_token(string s, size_t& pos, string& token);
-  bool is_rwx(string& token, rwx_t& cap_val);
+  bool get_next_token(string s, size_t& pos, string& token) const;
+  bool is_rwx(string& token, rwx_t& cap_val) const;
   
   OSDCaps() : default_allow(0), default_deny(0), allow_all(false),
 	      auid(CEPH_AUTH_UID_DEFAULT) {}
   bool parse(bufferlist::iterator& iter);
-  int get_pool_cap(string& pool_name, uint64_t uid = CEPH_AUTH_UID_DEFAULT);
-  bool is_mon() { return CEPH_ENTITY_TYPE_MON == peer_type; }
-  bool is_osd() { return CEPH_ENTITY_TYPE_OSD == peer_type; }
-  bool is_mds() { return CEPH_ENTITY_TYPE_MDS == peer_type; }
+  int get_pool_cap(const string& pool_name,
+                   uint64_t uid = CEPH_AUTH_UID_DEFAULT) const;
+  bool is_mon() const { return CEPH_ENTITY_TYPE_MON == peer_type; }
+  bool is_osd() const { return CEPH_ENTITY_TYPE_OSD == peer_type; }
+  bool is_mds() const { return CEPH_ENTITY_TYPE_MDS == peer_type; }
   void set_allow_all(bool allow) { allow_all = allow; }
   void set_peer_type (int pt) { peer_type = pt; }
   void set_auid(uint64_t uid) { auid = uid; }
