@@ -5344,7 +5344,18 @@ bool OSD::op_has_sufficient_caps(PG *pg, MOSDOp *op)
   OSDCaps& caps = session->caps;
   session->put();
 
-  int perm = caps.get_pool_cap(pg->pool->name, pg->pool->auid);
+  int perm = caps.get_object_cap(op->get_oid().name, pg->pool->name,
+                                 pg->pool->auid);
+  if (op->get_object_locator().key.length()) {
+    /*  If there is a locator, the permissions must apply to both the object
+     *  and the locator. This ensures that a malicious client can't do a
+     *  clone_range from an object he shouldn't be able to read into an object
+     *  he can write to, and greatly simplifies our permissions model for
+     *  the future. */
+    int locator_perm = caps.get_object_cap(op->get_object_locator().key,
+                                           pg->pool->name, pg->pool->auid);
+    perm &= locator_perm;
+  }
   dout(20) << "op_has_sufficient_caps pool=" << pg->pool->id << " (" << pg->pool->name
 	   << ") owner=" << pg->pool->auid << " perm=" << perm
 	   << " may_read=" << op->may_read()

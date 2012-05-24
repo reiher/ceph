@@ -257,3 +257,9 @@ int OSDCaps::get_pool_cap(const string& pool_name,
   return explicit_cap;
 }
 
+int OSDCaps::get_object_cap(const string& object_name,
+                                  const string& pool_name,
+                                  uint64_t uid) const
+{
+  return get_pool_cap(pool_name, uid);
+}

@@ -87,6 +87,9 @@ struct OSDCaps {
   bool parse(bufferlist::iterator& iter);
   int get_pool_cap(const string& pool_name,
                    uint64_t uid = CEPH_AUTH_UID_DEFAULT) const;
+  int get_object_cap(const string& object_name,
+                     const string& pool_name,
+                     uint64_t uid = CEPH_AUTH_UID_DEFAULT) const;
   bool is_mon() const { return CEPH_ENTITY_TYPE_MON == peer_type; }
   bool is_osd() const { return CEPH_ENTITY_TYPE_OSD == peer_type; }
   bool is_mds() const { return CEPH_ENTITY_TYPE_MDS == peer_type; }
