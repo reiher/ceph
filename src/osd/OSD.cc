@@ -5352,13 +5352,13 @@ bool OSD::op_has_sufficient_caps(PG *pg, MOSDOp *op)
 	   << " may_exec=" << op->may_exec()
            << " require_exec_caps=" << op->require_exec_caps() << dendl;
 
-  if (op->may_read() && !(perm & OSD_POOL_CAP_R)) {
+  if (op->may_read() && !(perm & OSDCaps::OSD_POOL_CAP_R)) {
     dout(10) << " no READ permission to access pool " << pg->pool->name << dendl;
     return false;
-  } else if (op->may_write() && !(perm & OSD_POOL_CAP_W)) {
+  } else if (op->may_write() && !(perm & OSDCaps::OSD_POOL_CAP_W)) {
     dout(10) << " no WRITE permission to access pool " << pg->pool->name << dendl;
     return false;
-  } else if (op->require_exec_caps() && !(perm & OSD_POOL_CAP_X)) {
+  } else if (op->require_exec_caps() && !(perm & OSDCaps::OSD_POOL_CAP_X)) {
     dout(10) << " no EXEC permission to access pool " << pg->pool->name << dendl;
     return false;
   }

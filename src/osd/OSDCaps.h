@@ -27,24 +27,7 @@
 
 #include "include/types.h"
 
-#define OSD_POOL_CAP_R 0x01
-#define OSD_POOL_CAP_W 0x02
-#define OSD_POOL_CAP_X 0x04
-
-#define OSD_POOL_CAP_ALL (OSD_POOL_CAP_R | OSD_POOL_CAP_W | OSD_POOL_CAP_X)
-
 typedef __u8 rwx_t;
-
-static inline ostream& operator<<(ostream& out, rwx_t p) {
-  if (p & OSD_POOL_CAP_R)
-    out << "r";
-  if (p & OSD_POOL_CAP_W)
-    out << "w";
-  if (p & OSD_POOL_CAP_X)
-    out << "x";
-  return out;
-}
-
 
 struct OSDCap {
   rwx_t allow;
@@ -82,6 +65,12 @@ struct AuidMap : public CapMap {
 };
 
 struct OSDCaps {
+  static const int OSD_POOL_CAP_R = 1<<0;
+  static const int OSD_POOL_CAP_W = 1<<1;
+  static const int OSD_POOL_CAP_X = 1<<2;
+  static const int OSD_POOL_CAP_ALL =
+              ((1<<0) | (1<<1) | (1<<2));
+
   PoolsMap pools_map;
   AuidMap auid_map;
   rwx_t default_allow;
@@ -107,6 +96,16 @@ struct OSDCaps {
 
 static inline ostream& operator<<(ostream& out, const OSDCaps& c) {
   return out << "osdcaps(pools=" << c.pools_map.pools_map << " default allow=" << c.default_allow << " default_deny=" << c.default_deny << ")";
+}
+
+static inline ostream& operator<<(ostream& out, rwx_t p) {
+  if (p & OSDCaps::OSD_POOL_CAP_R)
+    out << "r";
+  if (p & OSDCaps::OSD_POOL_CAP_W)
+    out << "w";
+  if (p & OSDCaps::OSD_POOL_CAP_X)
+    out << "x";
+  return out;
 }
 
 #endif
