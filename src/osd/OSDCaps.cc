@@ -84,13 +84,13 @@ bool OSDCaps::is_rwx(string& token, rwx_t& cap_val)
   while (*t) {
     switch (*t) {
     case 'r':
-      val |= OSD_POOL_CAP_R;
+      val |= OSD_CAP_R;
       break;
     case 'w':
-      val |= OSD_POOL_CAP_W;
+      val |= OSD_CAP_W;
       break;
     case 'x':
-      val |= OSD_POOL_CAP_X;
+      val |= OSD_CAP_X;
       break;
     default:
       return false;
@@ -235,7 +235,7 @@ do { \
 int OSDCaps::get_pool_cap(string& pool_name, uint64_t uid)
 {
   if (allow_all)
-    return OSD_POOL_CAP_ALL;
+    return OSD_CAP_ALL;
 
   int explicit_cap = default_allow; //explicitly granted caps
   
@@ -248,7 +248,7 @@ int OSDCaps::get_pool_cap(string& pool_name, uint64_t uid)
   //owner gets full perms by default:
   if (uid == auid
       && explicit_cap == 0) {
-    explicit_cap = OSD_POOL_CAP_ALL;
+    explicit_cap = OSD_CAP_ALL;
   }
 
   explicit_cap &= ~default_deny;

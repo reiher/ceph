@@ -65,10 +65,10 @@ struct AuidMap : public CapMap {
 };
 
 struct OSDCaps {
-  static const int OSD_POOL_CAP_R = 1<<0;
-  static const int OSD_POOL_CAP_W = 1<<1;
-  static const int OSD_POOL_CAP_X = 1<<2;
-  static const int OSD_POOL_CAP_ALL =
+  static const int OSD_CAP_R = 1<<0;
+  static const int OSD_CAP_W = 1<<1;
+  static const int OSD_CAP_X = 1<<2;
+  static const int OSD_CAP_ALL =
               ((1<<0) | (1<<1) | (1<<2));
 
   PoolsMap pools_map;
@@ -99,11 +99,11 @@ static inline ostream& operator<<(ostream& out, const OSDCaps& c) {
 }
 
 static inline ostream& operator<<(ostream& out, rwx_t p) {
-  if (p & OSDCaps::OSD_POOL_CAP_R)
+  if (p & OSDCaps::OSD_CAP_R)
     out << "r";
-  if (p & OSDCaps::OSD_POOL_CAP_W)
+  if (p & OSDCaps::OSD_CAP_W)
     out << "w";
-  if (p & OSDCaps::OSD_POOL_CAP_X)
+  if (p & OSDCaps::OSD_CAP_X)
     out << "x";
   return out;
 }
