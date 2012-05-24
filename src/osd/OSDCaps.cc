@@ -28,7 +28,7 @@ void PoolsMap::dump() const
   }
 }
 
-void PoolsMap::apply_caps(const string& name, int& cap) const
+void PoolsMap::apply_pool_caps(const string& name, int& cap) const
 {
   map<string, OSDCap>::const_iterator iter;
 
@@ -244,7 +244,7 @@ int OSDCaps::get_pool_cap(const string& pool_name,
   auid_map.apply_caps(uid, explicit_cap);
 
   //check for explicitly granted caps and apply if needed
-  pools_map.apply_caps(pool_name, explicit_cap);
+  pools_map.apply_pool_caps(pool_name, explicit_cap);
 
   //owner gets full perms by default:
   if (uid == auid

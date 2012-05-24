@@ -50,7 +50,7 @@ struct PoolsMap : public CapMap {
   OSDCap& get_cap(const string& name) { return pools_map[name]; }
 
   void dump() const;
-  void apply_caps(const string& name, int& cap) const;
+  void apply_pool_caps(const string& name, int& cap) const;
 };
 
 struct AuidMap : public CapMap {
