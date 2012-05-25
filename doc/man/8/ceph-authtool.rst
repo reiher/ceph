@@ -95,6 +95,15 @@ A client mounting the file system with minimal permissions would need caps like:
 
         mon = "allow r"
 
+The OSD supports more granularity; you can also deny abilities::
+
+        # can read, write, and execute objects for 10, but not pool 10_private
+	osd = "allow rwx auid=10; deny rwx pool=10_private"
+
+You can even grant and deny abilities based on pool and object name prefix::
+        
+	# allow user to read objects which start with "public" or "all"
+	osd = "allow r pool=data prefix public all"
 
 Caps file format
 ================
