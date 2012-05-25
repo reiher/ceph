@@ -20,22 +20,58 @@ CapMap::~CapMap()
 {
 }
 
+void ObjectCapMap::apply_caps(const string& oid, int& cap) const
+{
+  map<string, OSDCap>::const_iterator iter;
+  for (iter = object_prefix_map.begin();
+      iter != object_prefix_map.end();
+      ++iter) {
+    const string prefix = iter->first;
+    const OSDCap& c = iter->second;
+    if ((oid.compare(0, prefix.length(), prefix)) == 0) {
+      cap |= c.allow;
+      cap &= ~c.deny;
+      break;
+    }
+  }
+}
+
 void PoolsMap::dump() const
 {
-  map<string, OSDCap>::const_iterator it;
+  map<string, std::pair<OSDCap, ObjectCapMap*> >::const_iterator it;
   for (it = pools_map.begin(); it != pools_map.end(); ++it) {
-    generic_dout(0) << it->first << " -> (" << (int)it->second.allow << "." << (int)it->second.deny << ")" << dendl;
+    generic_dout(0) << it->first << " -> (" << (int)it->second.first.allow
+                    << "." << (int)it->second.first.deny << ")" << dendl;
   }
+}
+
+ObjectCapMap& PoolsMap::get_ocap(const string& name)
+{
+  ObjectCapMap *existing = pools_map[name].second;
+  if (!existing) {
+    existing = new ObjectCapMap();
+    pools_map[name].second = existing;
+  }
+  return *existing;
 }
 
 void PoolsMap::apply_pool_caps(const string& name, int& cap) const
 {
-  map<string, OSDCap>::const_iterator iter;
+  map<string, std::pair<OSDCap, ObjectCapMap*> >::const_iterator iter;
 
   if ((iter = pools_map.find(name)) != pools_map.end()) {
-    const OSDCap& c = iter->second;
+    const OSDCap& c = iter->second.first;
     cap |= c.allow;
     cap &= ~c.deny;
+  }
+}
+
+PoolsMap::~PoolsMap()
+{
+  // we just need to clean up the ObjectCapMaps we created
+  map<string, std::pair<OSDCap, ObjectCapMap* > >::iterator iter;
+  for (iter = pools_map.begin(); iter != pools_map.end(); ++iter) {
+    if (iter->second.second) delete iter->second.second;
   }
 }
 
@@ -121,7 +157,9 @@ bool OSDCaps::parse(bufferlist::iterator& iter)
     bool cmd_uid = false;
     bool any_cmd = false;
     bool got_eq = false;
+    bool prefix = false;
     list<string> name_list;
+    list<string> prefix_list;
     bool last_is_comma = false;
     rwx_t cap_val = 0;
 
@@ -170,6 +208,9 @@ do { \
 	  cmd_uid = true;
         } else if (is_rwx(token, cap_val)) {
           ASSERT_STATE(op_allow || op_deny);
+        } else if (token.compare("prefix") == 0) {
+          ASSERT_STATE(cmd_pool);
+          prefix = true;
         } else if (token.compare(";") != 0) {
 	  ASSERT_STATE(got_eq);
           if (token.compare(",") == 0) {
@@ -177,26 +218,48 @@ do { \
 	    last_is_comma = true;
           } else {
             last_is_comma = false;
-            name_list.push_back(token);
+            if (prefix) {
+              prefix_list.push_back(token);
+            } else {
+              name_list.push_back(token);
+            }
           }
         }
 
-        if (token.compare(";") == 0 || pos >= s.size()) {
-          if (got_eq) {
-            ASSERT_STATE(name_list.size() > 0);
-	    CapMap *working_map = &pools_map;
-	    if (cmd_uid)
-	      working_map = &auid_map;
-            for (list<string>::iterator iter2 = name_list.begin();
-		 iter2 != name_list.end();
-		 ++iter2) {
-              OSDCap& cap = working_map->get_cap(*iter2);
-              if (op_allow) {
-                cap.allow |= cap_val;
-              } else {
-                cap.deny |= cap_val;
-              }
-            }
+	if (token.compare(";") == 0 || pos >= s.size()) {
+	  if (got_eq) {
+	    ASSERT_STATE(name_list.size() > 0);
+	    if (prefix) {
+	      for (list<string>::iterator pool_iter = name_list.begin();
+	          pool_iter != name_list.end();
+	          ++pool_iter) {
+	        ObjectCapMap& omap = pools_map.get_ocap(*pool_iter);
+	        for (list<string>::iterator prefix_iter = prefix_list.begin();
+	            prefix_iter != prefix_list.end();
+	            ++prefix_iter) {
+	          OSDCap& prefix_cap = omap.get_cap(*prefix_iter);
+	          if (op_allow) {
+	            prefix_cap.allow |= cap_val;
+	          } else {
+	            prefix_cap.deny |= cap_val;
+	          }
+	        }
+	      }
+	    } else {
+	      CapMap *working_map = &pools_map;
+	      if (cmd_uid)
+	        working_map = &auid_map;
+	      for (list<string>::iterator iter2 = name_list.begin();
+	          iter2 != name_list.end();
+	          ++iter2) {
+	        OSDCap& cap = working_map->get_cap(*iter2);
+	        if (op_allow) {
+	          cap.allow |= cap_val;
+	        } else {
+	          cap.deny |= cap_val;
+	        }
+	      }
+	    }
           } else {
             if (op_allow) {
               default_allow |= cap_val;
@@ -257,9 +320,20 @@ int OSDCaps::get_pool_cap(const string& pool_name,
   return explicit_cap;
 }
 
+/**
+ * Get the object cap for the given object, pool, and (object) uid.
+ *
+ * This grabs the pool cap for the pool and uid, then sticks any
+ * prefix-based object caps that might exist on top of that.
+ */
 int OSDCaps::get_object_cap(const string& object_name,
                                   const string& pool_name,
                                   uint64_t uid) const
 {
-  return get_pool_cap(pool_name, uid);
+  int cap = get_pool_cap(pool_name, uid);
+  ObjectCapMap *capmap = pools_map.get_ocap_pointer(pool_name);
+  if (capmap) {
+    capmap->apply_caps(object_name, cap);
+  }
+  return cap;
 }

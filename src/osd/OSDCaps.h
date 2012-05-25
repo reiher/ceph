@@ -44,13 +44,30 @@ struct CapMap {
   virtual OSDCap& get_cap(const string& name) = 0;
 };
 
-struct PoolsMap : public CapMap {
-  map<string, OSDCap> pools_map;
+struct ObjectCapMap : public CapMap {
+  map<string, OSDCap> object_prefix_map;
 
-  OSDCap& get_cap(const string& name) { return pools_map[name]; }
+  OSDCap& get_cap(const string& name) {
+    return object_prefix_map[name];
+  }
+  void apply_caps(const string& oid, int& cap) const;
+};
+
+struct PoolsMap : public CapMap {
+  map<string, std::pair<OSDCap, ObjectCapMap*> > pools_map;
+
+  OSDCap& get_cap(const string& name) { return pools_map[name].first; }
+  ObjectCapMap& get_ocap(const string& name);
+  ObjectCapMap *get_ocap_pointer(const string& name) const {
+    if (pools_map.find(name) != pools_map.end()) {
+      return pools_map.at(name).second;
+    }
+    return NULL;
+  }
 
   void dump() const;
   void apply_pool_caps(const string& name, int& cap) const;
+  virtual ~PoolsMap();
 };
 
 struct AuidMap : public CapMap {
