@@ -82,7 +82,7 @@ void MDSMonitor::create_initial()
 
 void MDSMonitor::update_from_paxos()
 {
-  version_t paxosv = paxos->get_version();
+  version_t paxosv = get_version();
   if (paxosv == mdsmap.epoch)
     return;
   assert(paxosv >= mdsmap.epoch);
@@ -124,7 +124,7 @@ void MDSMonitor::encode_pending(bufferlist &bl)
   //print_map(pending_mdsmap);
 
   // apply to paxos
-  assert(paxos->get_version() + 1 == pending_mdsmap.epoch);
+  assert(get_version() + 1 == pending_mdsmap.epoch);
   pending_mdsmap.encode(bl);
 }
 
@@ -542,7 +542,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
       MDSMap *p = &mdsmap;
       if (epoch) {
 	bufferlist b;
-	mon->store->get_bl_sn(b, "mdsmap", epoch);
+	get("mdsmap", epoch, b);
 	if (!b.length()) {
 	  p = 0;
 	  r = -ENOENT;
@@ -579,7 +579,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
       if (m->cmd.size() > 2) {
 	epoch_t e = atoi(m->cmd[2].c_str());
 	bufferlist b;
-	mon->store->get_bl_sn(b,"mdsmap",e);
+	get("mdsmap", e, b);
 	if (!b.length()) {
 	  r = -ENOENT;
 	} else {
@@ -604,7 +604,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
 	for (map<uint64_t, MDSMap::mds_info_t>::const_iterator i = mds_info.begin();
 	     i != mds_info.end();
 	     ++i) {
-	  mon->send_command(i->second.get_inst(), m->cmd, paxos->get_version());
+	  mon->send_command(i->second.get_inst(), m->cmd, get_version());
 	  r = 0;
 	}
 	if (r == -ENOENT) {
@@ -618,7 +618,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
 	m->cmd.erase(m->cmd.begin()); //done with target num now
 	if (!errno && who >= 0) {
 	  if (mdsmap.is_up(who)) {
-	    mon->send_command(mdsmap.get_inst(who), m->cmd, paxos->get_version());
+	    mon->send_command(mdsmap.get_inst(who), m->cmd, get_version());
 	    r = 0;
 	    ss << "ok";
 	  } else {
@@ -647,7 +647,7 @@ bool MDSMonitor::preprocess_command(MMonCommand *m)
   if (r != -1) {
     string rs;
     getline(ss, rs);
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    mon->reply_command(m, r, rs, rdata, get_version());
     return true;
   } else
     return false;
@@ -775,7 +775,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 	map.epoch = pending_mdsmap.epoch;  // make sure epoch is correct
 	pending_mdsmap = map;
 	string rs = "set mds map";
-	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
 	return true;
       } else
 	ss << "next mdsmap epoch " << pending_mdsmap.epoch << " != " << e;
@@ -792,7 +792,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 	ss << "set mds gid " << gid << " to state " << state << " " << ceph_mds_state_name(state);
 	string rs;
 	getline(ss, rs);
-	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
 	return true;
       }
     }
@@ -815,7 +815,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 	ss << "removed mds gid " << gid;
 	string rs;
 	getline(ss, rs);
-	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
 	return true;
       }
     }
@@ -826,7 +826,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       ss << "removed failed mds." << w;
       string rs;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "cluster_fail") {
@@ -893,7 +893,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
       ss << "new fs with metadata pool " << metadata << " and data pool " << data;
       string rs;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }    
   }
@@ -904,11 +904,11 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 
   if (r >= 0) {
     // success.. delay reply
-    paxos->wait_for_commit(new Monitor::C_Command(mon, m, r, rs, paxos->get_version()));
+    paxos->wait_for_commit(new Monitor::C_Command(mon, m, r, rs, get_version()));
     return true;
   } else {
     // reply immediately
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    mon->reply_command(m, r, rs, rdata, get_version());
     return false;
   }
 }

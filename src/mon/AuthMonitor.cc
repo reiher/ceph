@@ -35,7 +35,7 @@
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
-#define dout_prefix _prefix(_dout, mon, paxos->get_version())
+#define dout_prefix _prefix(_dout, mon, get_version())
 static ostream& _prefix(std::ostream *_dout, Monitor *mon, version_t v) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()
@@ -94,7 +94,7 @@ void AuthMonitor::create_initial()
 
   KeyRing keyring;
   bufferlist bl;
-  mon->store->get_bl_ss(bl, "mkfs", "keyring");
+  get("mkfs", "keyring", bl);
   bufferlist::iterator p = bl.begin();
   ::decode(keyring, p);
 
@@ -111,7 +111,7 @@ void AuthMonitor::create_initial()
 void AuthMonitor::update_from_paxos()
 {
   dout(10) << "update_from_paxos()" << dendl;
-  version_t paxosv = paxos->get_version();
+  version_t paxosv = get_version();
   version_t keys_ver = mon->key_server.get_ver();
   if (paxosv == keys_ver)
     return;
@@ -167,7 +167,7 @@ void AuthMonitor::update_from_paxos()
     mon->key_server.set_ver(keys_ver);
 
     if (keys_ver == 1) {
-      mon->store->erase_ss("mkfs", "keyring");
+      erase("mkfs", "keyring");
     }
   }
 
@@ -211,12 +211,12 @@ bool AuthMonitor::should_propose(double& delay)
 void AuthMonitor::create_pending()
 {
   pending_auth.clear();
-  dout(10) << "create_pending v " << (paxos->get_version() + 1) << dendl;
+  dout(10) << "create_pending v " << (get_version() + 1) << dendl;
 }
 
 void AuthMonitor::encode_pending(bufferlist &bl)
 {
-  dout(10) << "encode_pending v " << (paxos->get_version() + 1) << dendl;
+  dout(10) << "encode_pending v " << (get_version() + 1) << dendl;
   __u8 v = 1;
   ::encode(v, bl);
   for (vector<Incremental>::iterator p = pending_auth.begin();
@@ -523,7 +523,7 @@ bool AuthMonitor::preprocess_command(MMonCommand *m)
  done:
   string rs;
   getline(ss, rs, '\0');
-  mon->reply_command(m, r, rs, rdata, paxos->get_version());
+  mon->reply_command(m, r, rs, rdata, get_version());
   return true;
 }
 
@@ -577,7 +577,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
       import_keyring(keyring);
       ss << "imported keyring";
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "add" && m->cmd.size() >= 2) {
@@ -624,7 +624,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << "added key for " << auth_inc.name;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "get-or-create-key" && m->cmd.size() >= 3) {
@@ -684,7 +684,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << auth_inc.auth.key;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd[1] == "caps" && m->cmd.size() >= 3) {
@@ -711,7 +711,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << "updated caps for " << auth_inc.name;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;     
     }
     else if (m->cmd[1] == "del" && m->cmd.size() >= 3) {
@@ -728,7 +728,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
       ss << "updated";
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else {
@@ -740,7 +740,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
 
 done:
   getline(ss, rs, '\0');
-  mon->reply_command(m, err, rs, rdata, paxos->get_version());
+  mon->reply_command(m, err, rs, rdata, get_version());
   return false;
 }
 
