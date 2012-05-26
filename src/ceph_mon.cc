@@ -26,7 +26,7 @@ using namespace std;
 
 #include "mon/MonMap.h"
 #include "mon/Monitor.h"
-#include "mon/MonitorStore.h"
+#include "mon/MonitorObjectStore.h"
 #include "mon/MonClient.h"
 
 #include "msg/Messenger.h"
@@ -198,7 +198,9 @@ int main(int argc, const char **argv)
     }
 
     // go
-    MonitorStore store(g_conf->mon_data);
+    MonitorObjectStore store(g_conf->mon_data, g_conf->mon_journal);
+    store.mkfs();
+    store.mount();
     Monitor mon(g_ceph_context, g_conf->name.get_id(), &store, 0, &monmap);
     int r = mon.mkfs(osdmapbl);
     if (r < 0) {
@@ -207,21 +209,25 @@ int main(int argc, const char **argv)
     }
     cout << argv[0] << ": created monfs at " << g_conf->mon_data 
 	 << " for " << g_conf->name << std::endl;
+    store.umount();
     return 0;
   }
 
   CompatSet mon_features = get_ceph_mon_feature_compat_set();
   CompatSet ondisk_features;
 
-  MonitorStore store(g_conf->mon_data);
+  MonitorObjectStore store(g_conf->mon_data, g_conf->mon_journal);
   err = store.mount();
   if (err < 0) {
-    cerr << "problem opening monitor store in " << g_conf->mon_data << ": " << cpp_strerror(err) << std::endl;
+    cerr << "problem opening monitor store in " << g_conf->mon_data
+	 << " journal " << g_conf->mon_data << ": " << cpp_strerror(err)
+	 << std::endl;
     exit(1);
   }
 
   bufferlist magicbl;
-  err = store.get_bl_ss(magicbl, "magic", 0);
+//  err = store.get_bl_ss(magicbl, "magic", 0);
+  err = store.get(MonitorObjectStore::DEFAULT_DIR, "magic", magicbl);
   if (err < 0) {
     cerr << "unable to read magic from mon data.. did you run mkcephfs?" << std::endl;
     exit(1);
@@ -233,7 +239,8 @@ int main(int argc, const char **argv)
   }
 
   bufferlist features;
-  store.get_bl_ss(features, COMPAT_SET_LOC, 0);
+//  store.get_bl_ss(features, COMPAT_SET_LOC, 0);
+  store.get(MonitorObjectStore::DEFAULT_DIR, COMPAT_SET_LOC, features);
   if (features.length() == 0) {
     cerr << "WARNING: mon fs missing feature list.\n"
 	 << "Assuming it is old-style and introducing one." << std::endl;
@@ -267,7 +274,8 @@ int main(int argc, const char **argv)
     }
 
     // get next version
-    version_t v = store.get_int("monmap", "last_committed");
+//    version_t v = store.get_int("monmap", "last_committed");
+    version_t v = store.get("monmap", "last_committed");
     cout << "last committed monmap epoch is " << v << ", injected map will be " << (v+1) << std::endl;
     v++;
 
@@ -285,9 +293,9 @@ int main(int argc, const char **argv)
     ::encode(mapbl, final);
 
     // save it
-    store.put_bl_sn(mapbl, "monmap", v);
-    store.put_bl_ss(final, "monmap", "latest");
-    store.put_int(v, "monmap", "last_committed");
+    store.put("monmap", v, mapbl);
+    store.put("monmap", "latest", final);
+    store.put("monmap", "last_committed", v);
 
     cout << "done." << std::endl;
     exit(0);
@@ -299,14 +307,14 @@ int main(int argc, const char **argv)
   {
     bufferlist mapbl;
     bufferlist latest;
-    store.get_bl_ss(latest, "monmap", "latest");
+    store.get("monmap", "latest", latest);
     if (latest.length() > 0) {
       bufferlist::iterator p = latest.begin();
       version_t v;
       ::decode(v, p);
       ::decode(mapbl, p);
     } else {
-      store.get_bl_ss(mapbl, "mkfs", "monmap");
+      store.get("mkfs", "monmap", mapbl);
       if (mapbl.length() == 0) {
 	cerr << "mon fs missing 'monmap/latest' and 'mkfs/monmap'" << std::endl;
 	exit(1);
@@ -400,7 +408,8 @@ int main(int argc, const char **argv)
     return 1;
 
   // start monitor
-  mon = new Monitor(g_ceph_context, g_conf->name.get_id(), &store, messenger, &monmap);
+  mon = new Monitor(g_ceph_context, g_conf->name.get_id(), &store, 
+		    messenger, &monmap);
 
   global_init_daemonize(g_ceph_context, 0);
   common_init_finish(g_ceph_context);
