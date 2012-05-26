@@ -16,7 +16,7 @@
 #include "Monitor.h"
 
 #include "common/Timer.h"
-#include "MonitorStore.h"
+#include "MonitorObjectStore.h"
 #include "MonmapMonitor.h"
 #include "messages/MMonElection.h"
 
@@ -34,7 +34,7 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, epoch_t epoch) {
 
 void Elector::init()
 {
-  epoch = mon->store->get_int("election_epoch");
+  epoch = mon->ostore->get(MonitorObjectStore::DEFAULT_DIR, "election_epoch");
   if (!epoch)
     epoch = 1;
   dout(1) << "init, last seen epoch " << epoch << dendl;
@@ -51,7 +51,7 @@ void Elector::bump_epoch(epoch_t e)
   dout(10) << "bump_epoch " << epoch << " to " << e << dendl;
   assert(epoch <= e);
   epoch = e;
-  mon->store->put_int(epoch, "election_epoch");
+  mon->ostore->put(MonitorObjectStore::DEFAULT_DIR, "election_epoch", epoch);
 
   // clear up some state
   electing_me = false;
@@ -325,7 +325,7 @@ void Elector::dispatch(Message *m)
 		<< ", taking it"
 		<< dendl;
 	mon->monmap->decode(em->monmap_bl);
-	mon->store->put_bl_sn(em->monmap_bl, "monmap", mon->monmap->epoch);
+	mon->ostore->put("monmap", mon->monmap->epoch, em->monmap_bl);
 	mon->monmon()->paxos->stash_latest(mon->monmap->epoch, em->monmap_bl);
       } else if (peermap->epoch < mon->monmap->epoch) {
 	dout(0) << m->get_source_inst() << " has older monmap epoch " << peermap->epoch
