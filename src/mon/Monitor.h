@@ -43,6 +43,8 @@
 
 #include "perfglue/heap_profiler.h"
 
+#include "MonitorObjectStore.h"
+
 #include <memory>
 
 
@@ -75,8 +77,6 @@ enum {
   l_cluster_mds_epoch,
   l_cluster_last,
 };
-
-class MonitorStore;
 
 class PaxosService;
 
@@ -131,7 +131,7 @@ private:
 
   // -- local storage --
 public:
-  MonitorStore *store;
+  MonitorObjectStore *ostore;
 
   // -- monitor state --
 private:
@@ -385,7 +385,8 @@ public:
   void extract_save_mon_key(KeyRing& keyring);
 
  public:
-  Monitor(CephContext *cct_, string nm, MonitorStore *s, Messenger *m, MonMap *map);
+  Monitor(CephContext *cct_, string nm, MonitorObjectStore *os,
+	  Messenger *m, MonMap *map);
   ~Monitor();
 
   int init();
