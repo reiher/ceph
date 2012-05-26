@@ -71,7 +71,7 @@ endif
 # monitor
 ceph_mon_SOURCES = ceph_mon.cc
 ceph_mon_LDFLAGS = $(AM_LDFLAGS)
-ceph_mon_LDADD = libmon.a $(LIBGLOBAL_LDA)
+ceph_mon_LDADD = libmon.a $(LIBOS_LDA) $(LIBGLOBAL_LDA)
 ceph_mon_CXXFLAGS = ${AM_CXXFLAGS}
 bin_PROGRAMS += ceph-mon
 
@@ -1083,6 +1083,7 @@ libmon_a_SOURCES = \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
 	mon/Elector.cc \
+	mon/MonitorObjectStore.cc \
 	mon/MonitorStore.cc
 libmon_a_CXXFLAGS= ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS}
 noinst_LIBRARIES += libmon.a
@@ -1520,6 +1521,7 @@ noinst_HEADERS = \
         mon/MonClient.h\
         mon/MonMap.h\
         mon/Monitor.h\
+	mon/MonitorObjectStore.h\
         mon/MonitorStore.h\
         mon/OSDMonitor.h\
         mon/PGMap.h\
