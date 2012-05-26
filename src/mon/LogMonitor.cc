@@ -30,7 +30,7 @@
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
-#define dout_prefix _prefix(_dout, mon, paxos->get_version())
+#define dout_prefix _prefix(_dout, mon, get_version())
 static ostream& _prefix(std::ostream *_dout, Monitor *mon, version_t v) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()
@@ -91,7 +91,7 @@ void LogMonitor::create_initial()
 
 void LogMonitor::update_from_paxos()
 {
-  version_t paxosv = paxos->get_version();
+  version_t paxosv = get_version();
   if (paxosv == summary.version)
     return;
   assert(paxosv >= summary.version);
@@ -154,17 +154,17 @@ void LogMonitor::update_from_paxos()
   paxos->stash_latest(paxosv, bl);
 
   if (blog.length())
-    mon->store->append_bl_ss(blog, "log", NULL);
+    append("log", "", blog);
   if (blogdebug.length())
-    mon->store->append_bl_ss(blogdebug, "log.debug", NULL);
+    append("log.debug", "", blogdebug);
   if (bloginfo.length())
-    mon->store->append_bl_ss(bloginfo, "log.info", NULL);
+    append("log.info", "", bloginfo);
   if (blogsec.length())
-    mon->store->append_bl_ss(bloginfo, "log.security", NULL);
+    append("log.security", "", blogsec);
   if (blogwarn.length())
-    mon->store->append_bl_ss(blogwarn, "log.warn", NULL);
+    append("log.warn", "", blogwarn);
   if (blogerr.length())
-    mon->store->append_bl_ss(blogerr, "log.err", NULL);
+    append("log.err", "", blogerr);
 
 
   // trim
@@ -179,12 +179,12 @@ void LogMonitor::create_pending()
 {
   pending_log.clear();
   pending_summary = summary;
-  dout(10) << "create_pending v " << (paxos->get_version() + 1) << dendl;
+  dout(10) << "create_pending v " << (get_version() + 1) << dendl;
 }
 
 void LogMonitor::encode_pending(bufferlist &bl)
 {
-  dout(10) << "encode_pending v " << (paxos->get_version() + 1) << dendl;
+  dout(10) << "encode_pending v " << (get_version() + 1) << dendl;
   __u8 v = 1;
   ::encode(v, bl);
   for (multimap<utime_t,LogEntry>::iterator p = pending_log.begin();
@@ -301,7 +301,7 @@ bool LogMonitor::preprocess_command(MMonCommand *m)
   if (r != -1) {
     string rs;
     getline(ss, rs);
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    mon->reply_command(m, r, rs, rdata, get_version());
     return true;
   } else
     return false;
@@ -318,7 +318,7 @@ bool LogMonitor::prepare_command(MMonCommand *m)
   ss << "unrecognized command";
 
   getline(ss, rs);
-  mon->reply_command(m, err, rs, paxos->get_version());
+  mon->reply_command(m, err, rs, get_version());
   return false;
 }
 

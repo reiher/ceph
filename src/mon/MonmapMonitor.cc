@@ -46,7 +46,7 @@ void MonmapMonitor::create_initial()
 
 void MonmapMonitor::update_from_paxos()
 {
-  version_t paxosv = paxos->get_version();
+  version_t paxosv = get_version();
   if (paxosv <= paxos->get_stashed_version() &&
       paxosv <= mon->monmap->get_epoch())
     return;
@@ -78,7 +78,7 @@ void MonmapMonitor::update_from_paxos()
     paxos->stash_latest(paxosv, monmap_bl);
 
     if (orig_latest == 0)
-      mon->store->erase_ss("mkfs", "monmap");
+      erase("mkfs", "monmap");
   }
 
   if (need_restart)
@@ -104,10 +104,10 @@ void MonmapMonitor::encode_pending(bufferlist& bl)
 
 void MonmapMonitor::on_active()
 {
-  if (paxos->get_version() >= 1 && !mon->has_ever_joined) {
+  if (get_version() >= 1 && !mon->has_ever_joined) {
     // make note of the fact that i was, once, part of the quorum.
     dout(10) << "noting that i was, once, part of an active quorum." << dendl;
-    mon->store->put_int(1, "joined");
+    put("joined", "", 1);
     mon->has_ever_joined = true;
   }
 
@@ -250,7 +250,7 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
     string rs;
     getline(ss, rs);
 
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    mon->reply_command(m, r, rs, rdata, get_version());
     return true;
   } else
     return false;
@@ -301,7 +301,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
       pending_map.last_changed = ceph_clock_now(g_ceph_context);
       ss << "added mon." << name << " at " << addr;
       getline(ss, rs);
-      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
       return true;
     }
     else if (m->cmd.size() == 3 && m->cmd[1] == "remove") {
@@ -318,7 +318,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
       ss << "removed mon." << name << " at " << addr << ", there are now " << pending_map.size() << " monitors" ;
       getline(ss, rs);
       // send reply immediately in case we get removed
-      mon->reply_command(m, 0, rs, paxos->get_version());
+      mon->reply_command(m, 0, rs, get_version());
       return true;
     }
     else
@@ -328,7 +328,7 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
   
 out:
   getline(ss, rs);
-  mon->reply_command(m, err, rs, paxos->get_version());
+  mon->reply_command(m, err, rs, get_version());
   return false;
 }
 

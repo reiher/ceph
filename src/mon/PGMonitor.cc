@@ -142,7 +142,7 @@ void PGMonitor::create_initial()
 
 void PGMonitor::update_from_paxos()
 {
-  version_t paxosv = paxos->get_version();
+  version_t paxosv = get_version();
   if (paxosv == pg_map.version)
     return;
   assert(paxosv >= pg_map.version);
@@ -206,7 +206,7 @@ void PGMonitor::update_from_paxos()
     pg_map.dump(ds);
     bufferlist d;
     d.append(ds);
-    mon->store->put_bl_sn(d, "pgmap_dump", paxosv);
+    put("pgmap_dump", paxosv, d);
   }
 
   unsigned max = g_conf->mon_max_pgmap_epochs;
@@ -256,7 +256,7 @@ void PGMonitor::create_pending()
 void PGMonitor::encode_pending(bufferlist &bl)
 {
   dout(10) << "encode_pending v " << pending_inc.version << dendl;
-  assert(paxos->get_version() + 1 == pending_inc.version);
+  assert(get_version() + 1 == pending_inc.version);
   pending_inc.encode(bl);
 }
 
@@ -322,7 +322,7 @@ void PGMonitor::handle_statfs(MStatfs *statfs)
   }
 
   // fill out stfs
-  reply = new MStatfsReply(mon->monmap->fsid, statfs->get_tid(), paxos->get_version());
+  reply = new MStatfsReply(mon->monmap->fsid, statfs->get_tid(), get_version());
 
   // these are in KB.
   reply->h.st.kb = pg_map.osd_sum.kb;
@@ -354,7 +354,7 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
     goto out;
   }
   
-  reply = new MGetPoolStatsReply(m->fsid, m->get_tid(), paxos->get_version());
+  reply = new MGetPoolStatsReply(m->fsid, m->get_tid(), get_version());
 
   for (list<string>::iterator p = m->pools.begin();
        p != m->pools.end();
@@ -576,7 +576,7 @@ void PGMonitor::check_osd_map(epoch_t epoch)
        e++) {
     dout(10) << "check_osd_map applying osdmap e" << e << " to pg_map" << dendl;
     bufferlist bl;
-    mon->store->get_bl_sn(bl, "osdmap", e);
+    get("osdmap", e, bl);
     assert(bl.length());
     OSDMap::Incremental inc(bl);
     for (map<int32_t,uint32_t>::iterator p = inc.new_weight.begin();
@@ -1015,7 +1015,7 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
   if (r != -1) {
     string rs;
     getline(ss, rs);
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    mon->reply_command(m, r, rs, rdata, get_version());
     return true;
   } else
     return false;
@@ -1055,7 +1055,7 @@ bool PGMonitor::prepare_command(MMonCommand *m)
     }
     ss << "pg " << m->cmd[2] << " now creating, ok";
     getline(ss, rs);
-    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
     return true;
   }
   else if (m->cmd.size() > 1 && m->cmd[1] == "set_full_ratio") {
@@ -1071,7 +1071,7 @@ bool PGMonitor::prepare_command(MMonCommand *m)
       goto out;
     }
     pending_inc.full_ratio = n;
-    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
     return true;
   }
   else if (m->cmd.size() > 1 && m->cmd[1] == "set_nearfull_ratio") {
@@ -1087,7 +1087,7 @@ bool PGMonitor::prepare_command(MMonCommand *m)
       goto out;
     }
     pending_inc.nearfull_ratio = n;
-    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, get_version()));
     return true;
   }
 
@@ -1095,7 +1095,7 @@ bool PGMonitor::prepare_command(MMonCommand *m)
   getline(ss, rs);
   if (r < 0 && rs.length() == 0)
     rs = cpp_strerror(r);
-  mon->reply_command(m, r, rs, paxos->get_version());
+  mon->reply_command(m, r, rs, get_version());
   return false;
 }
 
