@@ -887,13 +887,19 @@ void Monitor::handle_probe_data(MMonProbe *m)
   // store any new stuff
   if (m->paxos_values.size()) {
     map<string, map<version_t,bufferlist> >::iterator p;
+   
+    // bundle everything on a single transaction
+    ObjectStore::Transaction t;
+    
     for (p = m->paxos_values.begin(); p != m->paxos_values.end(); ++p) {
-      ostore->put(p->first.c_str(), p->second.begin(), p->second.end());
+      ostore->put(&t, p->first.c_str(), p->second.begin(), p->second.end());
     }
 
     pax->last_committed = m->paxos_values.begin()->second.rbegin()->first;
-      ostore->put(m->machine_name.c_str(), "last_committed", 
-		  pax->last_committed);
+    ostore->put(&t, m->machine_name.c_str(), 
+		"last_committed", pax->last_committed);
+
+    ostore->apply_transaction(t);
   }
 
   // latest?
@@ -1956,23 +1962,23 @@ int Monitor::mkfs(bufferlist& osdmapbl)
     return err;
   }
 
+  ObjectStore::Transaction t;
+
   bufferlist magicbl;
   magicbl.append(CEPH_MON_ONDISK_MAGIC);
   magicbl.append("\n");
-  int r = ostore->put(MonitorObjectStore::DEFAULT_DIR, "magic", magicbl);
-  if (r < 0)
-    return r;
+  ostore->put(&t, MonitorObjectStore::DEFAULT_DIR, "magic", magicbl);
 
   bufferlist features;
   CompatSet mon_features = get_ceph_mon_feature_compat_set();
   mon_features.encode(features);
-  ostore->put(MonitorObjectStore::DEFAULT_DIR, COMPAT_SET_LOC, features);
+  ostore->put(&t, MonitorObjectStore::DEFAULT_DIR, COMPAT_SET_LOC, features);
 
   // save monmap, osdmap, keyring.
   bufferlist monmapbl;
   monmap->encode(monmapbl, CEPH_FEATURES_ALL);
   monmap->set_epoch(0);     // must be 0 to avoid confusing first MonmapMonitor::update_from_paxos()
-  ostore->put("mkfs", "monmap", monmapbl);
+  ostore->put(&t, "mkfs", "monmap", monmapbl);
 
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
@@ -1984,11 +1990,11 @@ int Monitor::mkfs(bufferlist& osdmapbl)
       derr << "error decoding provided osdmap: " << e.what() << dendl;
       return -EINVAL;
     }
-    ostore->put("mkfs", "osdmap", osdmapbl);
+    ostore->put(&t, "mkfs", "osdmap", osdmapbl);
   }
 
   KeyRing keyring;
-  r = keyring.load(g_ceph_context, g_conf->keyring);
+  int r = keyring.load(g_ceph_context, g_conf->keyring);
   if (r < 0) {
     derr << "unable to load initial keyring " << g_conf->keyring << dendl;
     return r;
@@ -1999,7 +2005,8 @@ int Monitor::mkfs(bufferlist& osdmapbl)
 
   bufferlist keyringbl;
   keyring.encode_plaintext(keyringbl);
-  ostore->put("mkfs", "keyring", keyringbl);
+  ostore->put(&t, "mkfs", "keyring", keyringbl);
+  ostore->apply_transaction(t);
 
   return 0;
 }
@@ -2015,6 +2022,13 @@ void Monitor::extract_save_mon_key(KeyRing& keyring)
     pkey.add(mon_name, mon_key);
     bufferlist bl;
     pkey.encode_plaintext(bl);
+    /**
+     * @note This put happens on its own transaction, even though it may be
+     *	     "nested" within the Monitor::mkfs() transaction.
+     *	     Also, this put becomes available *before* the puts in the
+     *	     transaction from Monitor::mkfs(). We don't think there's a problem
+     *	     with that, but keep an eye out for any problems.
+     */
     ostore->put(MonitorObjectStore::DEFAULT_DIR, "keyring", bl);
     keyring.remove(mon_name);
   }
