@@ -60,6 +60,8 @@ e 12v
 
 #include "common/Timer.h"
 
+#include "os/ObjectStore.h"
+
 class Monitor;
 class MMonPaxos;
 class Paxos;
@@ -271,6 +273,7 @@ public:
     waiting_for_active.push_back(c);
   }
 
+  void trim_to(ObjectStore::Transaction *t, version_t first, bool force=false);
   void trim_to(version_t first, bool force=false);
   
   void start_slurping();
@@ -305,6 +308,7 @@ public:
 
   // if state values are incrementals, it is usefult to keep
   // the latest copy of the complete structure.
+  void stash_latest(ObjectStore::Transaction *t, version_t v, bufferlist& bl);
   void stash_latest(version_t v, bufferlist& bl);
   version_t get_stashed(bufferlist& bl);
   version_t get_stashed_version() { return latest_stashed; }
