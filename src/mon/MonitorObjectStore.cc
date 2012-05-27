@@ -35,7 +35,7 @@ const coll_t MonitorObjectStore::DEFAULT_COLL(DEFAULT_DIR);
 
 coll_t MonitorObjectStore::_get_coll(ObjectStore::Transaction *t, string dir)
 {
-  coll_t coll((dir.emptry() ? DEFAULT_DIR : dir));
+  coll_t coll((dir.empty() ? DEFAULT_DIR : dir));
 
   if (!collection_exists(coll)) {
     t->create_collection(coll);
@@ -50,7 +50,7 @@ coll_t MonitorObjectStore::_get_coll(string dir)
   coll_t coll = _get_coll(&t, dir);
 
   if (!t.empty())
-    apply_transaction(&t);
+    apply_transaction(t);
 
   return coll;
 }
@@ -152,13 +152,26 @@ int MonitorObjectStore::append(string dir, string name, bufferlist& bl)
   return 0;
 }
 
+void MonitorObjectStore::erase(ObjectStore::Transaction *t,
+			       string dir, string name)
+{
+  coll_t coll(dir);
+  hobject_t obj(sobject_t(name, CEPH_NOSNAP));
+  t->remove(coll, obj);
+}
+
+void MonitorObjectStore::erase(ObjectStore::Transaction *t,
+			       string dir, version_t ver)
+{
+  stringstream ss;
+  ss << ver;
+  erase(t, dir, ss.str());
+}
+
 int MonitorObjectStore::erase(string dir, string name)
 {
-  coll_t coll = _get_coll(dir);
-  hobject_t obj(sobject_t(name, CEPH_NOSNAP));
-
   ObjectStore::Transaction t;
-  t.remove(coll, obj);
+  erase(&t, dir, name);
   apply_transaction(t);
 
   return 0;
@@ -166,9 +179,10 @@ int MonitorObjectStore::erase(string dir, string name)
 
 int MonitorObjectStore::erase(string dir, version_t ver)
 {
-  stringstream ss;
-  ss << ver;
-  return erase(dir, ss.str());
+  ObjectStore::Transaction t;
+  erase(&t, dir, ver);
+  apply_transaction(t);
+  return 0;
 }
 
 

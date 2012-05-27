@@ -64,6 +64,10 @@ class MonitorObjectStore : public FileStore
 	  map<version_t,bufferlist>::iterator end);
 
   int append(string dir, string name, bufferlist& bl);
+
+  void erase(ObjectStore::Transaction *t, string dir, string name);
+  void erase(ObjectStore::Transaction *t, string dir, version_t ver);
+
   int erase(string dir, string name);
   int erase(string dir, version_t ver);
 
