@@ -48,6 +48,8 @@ e 12v
 
 #include "common/Timer.h"
 
+#include "os/ObjectStore.h"
+
 class Monitor;
 class MMonPaxos;
 class Paxos;
@@ -934,7 +936,7 @@ public:
    * @param force If specified, we may even erase the latest stashed version
    *		  iif @p first is higher than that version.
    */
-  void trim_to(version_t first, bool force=false);
+  void trim_to(ObjectStore::Transaction *t, version_t first, bool force=false);
  
   /**
    * @defgroup Paxos_h_slurping_funcs Slurping-related functions
@@ -1071,6 +1073,7 @@ public:
    * @}
    */
 
+<<<<<<< HEAD
   /**
    * @defgroup Paxos_h_stash_funcs State values stashing-related functions
    *
@@ -1089,6 +1092,11 @@ public:
    * @param v the latest version
    * @param bl the latest version's value
    */
+=======
+  // if state values are incrementals, it is usefult to keep
+  // the latest copy of the complete structure.
+  void stash_latest(ObjectStore::Transaction *t, version_t v, bufferlist& bl);
+>>>>>>> 7867fee... mon: Bundling multiple store operations in one single transaction on the Paxos class.
   void stash_latest(version_t v, bufferlist& bl);
   /**
    * Get the latest stashed version's value

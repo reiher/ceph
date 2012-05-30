@@ -193,6 +193,7 @@ void Paxos::share_state(MMonPaxos *m, version_t peer_first_committed,
 
 void Paxos::store_state(MMonPaxos *m)
 {
+  ObjectStore::Transaction t;
   map<version_t,bufferlist>::iterator start = m->values.begin();
 
   // stash?
@@ -203,15 +204,16 @@ void Paxos::store_state(MMonPaxos *m)
     assert(start != m->values.end() && start->first == m->latest_version);
 
     // wipe out everything we had previously
-    trim_to(last_committed + 1);
+    trim_to(&t, last_committed + 1);
 
-    stash_latest(m->latest_version, m->latest_value);
+    stash_latest(&t, m->latest_version, m->latest_value);
 
     first_committed = m->latest_version;
     last_committed = m->latest_version;
-    mon->ostore->put(machine_name, m->latest_version, start->second);
-    mon->ostore->put(machine_name, "first_committed", first_committed);
-    mon->ostore->put(machine_name, "last_committed", last_committed);
+
+    mon->ostore->put(&t, machine_name, m->latest_version, start->second);
+    mon->ostore->put(&t, machine_name, "first_committed", first_committed);
+    mon->ostore->put(&t, machine_name, "last_committed", last_committed);
 
   }
 
@@ -242,10 +244,12 @@ void Paxos::store_state(MMonPaxos *m)
   } else {
     dout(10) << "store_state [" << start->first << ".." 
 	     << last_committed << "]" << dendl;
-    mon->ostore->put(machine_name, start, end);
-    mon->ostore->put(machine_name, "last_committed", last_committed);
-    mon->ostore->put(machine_name, "first_committed", first_committed);
+    mon->ostore->put(&t, machine_name, start, end);
+    mon->ostore->put(&t, machine_name, "last_committed", last_committed);
+    mon->ostore->put(&t, machine_name, "first_committed", first_committed);
   }
+  if (!t.empty())
+    mon->ostore->apply_transaction(t);
 }
 
 
@@ -736,7 +740,7 @@ void Paxos::lease_renew_timeout()
  * trim old states
  */
 
-void Paxos::trim_to(version_t first, bool force)
+void Paxos::trim_to(ObjectStore::Transaction *t, version_t first, bool force)
 {
   dout(10) << "trim_to " << first << " (was " << first_committed << ")"
 	   << ", latest_stashed " << latest_stashed
@@ -748,14 +752,24 @@ void Paxos::trim_to(version_t first, bool force)
   while (first_committed < first &&
 	 (force || first_committed < latest_stashed)) {
     dout(10) << "trim " << first_committed << dendl;
-    mon->ostore->erase(machine_name, first_committed);
+    mon->ostore->erase(t, machine_name, first_committed);
     for (list<string>::iterator p = extra_state_dirs.begin();
 	 p != extra_state_dirs.end();
 	 ++p)
-      mon->ostore->erase(p->c_str(), first_committed);
+      mon->ostore->erase(t, p->c_str(), first_committed);
     first_committed++;
   }
-  mon->ostore->put(machine_name, "first_committed", first_committed);
+  mon->ostore->put(t, machine_name, "first_committed", first_committed);
+}
+
+void Paxos::trim_to(version_t first, bool force)
+{
+  ObjectStore::Transaction t;
+  
+  trim_to(&t, first, force);
+
+  if (!t.empty())
+    mon->ostore->apply_transaction(t);
 }
 
 /*
@@ -975,7 +989,8 @@ bool Paxos::propose_new_value(bufferlist& bl, Context *oncommit)
   return true;
 }
 
-void Paxos::stash_latest(version_t v, bufferlist& bl)
+void Paxos::stash_latest(ObjectStore::Transaction *t, 
+			 version_t v, bufferlist& bl)
 {
   if (v == latest_stashed) {
     dout(10) << "stash_latest v" << v << " already stashed" << dendl;
@@ -987,9 +1002,17 @@ void Paxos::stash_latest(version_t v, bufferlist& bl)
   ::encode(bl, final);
   
   dout(10) << "stash_latest v" << v << " len " << bl.length() << dendl;
-  mon->ostore->put(machine_name, "latest", final);
+  mon->ostore->put(t, machine_name, "latest", final);
 
   latest_stashed = v;
+}
+
+void Paxos::stash_latest(version_t v, bufferlist& bl)
+{
+  ObjectStore::Transaction t;
+  stash_latest(&t, v, bl);
+  if (!t.empty())
+    mon->ostore->apply_transaction(t);
 }
 
 version_t Paxos::get_stashed(bufferlist& bl)
