@@ -14,7 +14,7 @@
 
 #include "Paxos.h"
 #include "Monitor.h"
-#include "MonitorStore.h"
+#include "MonitorObjectStore.h"
 
 #include "messages/MMonPaxos.h"
 
@@ -39,13 +39,13 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, const string& name,
 void Paxos::init()
 {
   // load paxos variables from stable storage
-  last_pn = mon->store->get_int(machine_name, "last_pn");
-  accepted_pn = mon->store->get_int(machine_name, "accepted_pn");
-  last_committed = mon->store->get_int(machine_name, "last_committed");
-  first_committed = mon->store->get_int(machine_name, "first_committed");
+  last_pn = mon->ostore->get(machine_name, "last_pn");
+  accepted_pn = mon->ostore->get(machine_name, "accepted_pn");
+  last_committed = mon->ostore->get(machine_name, "last_committed");
+  first_committed = mon->ostore->get(machine_name, "first_committed");
   bufferlist temp;
   latest_stashed = get_stashed(temp);
-  slurping = mon->store->get_int(machine_name, "slurping");
+  slurping = mon->ostore->get(machine_name, "slurping");
 
   dout(10) << "init" << dendl;
 }
@@ -69,10 +69,10 @@ void Paxos::collect(version_t oldpn)
   peer_last_committed.clear();
 
   // look for uncommitted value
-  if (mon->store->exists_bl_sn(machine_name, last_committed+1)) {
+  if (mon->ostore->exists(machine_name, last_committed+1)) {
     uncommitted_v = last_committed+1;
     uncommitted_pn = accepted_pn;
-    mon->store->get_bl_sn(uncommitted_value, machine_name, last_committed+1);
+    mon->ostore->get(machine_name, last_committed+1, uncommitted_value);
     dout(10) << "learned uncommitted " << (last_committed+1)
 	     << " (" << uncommitted_value.length() << " bytes) from myself" 
 	     << dendl;
@@ -127,7 +127,7 @@ void Paxos::handle_collect(MMonPaxos *collect)
     accepted_pn_from = collect->pn_from;
     dout(10) << "accepting pn " << accepted_pn << " from " 
 	     << accepted_pn_from << dendl;
-    mon->store->put_int(accepted_pn, machine_name, "accepted_pn");
+    mon->ostore->put(machine_name, "accepted_pn", accepted_pn);
   } else {
     // don't accept!
     dout(10) << "NOT accepting pn " << collect->pn << " from " << collect->pn_from
@@ -144,8 +144,8 @@ void Paxos::handle_collect(MMonPaxos *collect)
   // do we have an accepted but uncommitted value?
   //  (it'll be at last_committed+1)
   bufferlist bl;
-  if (mon->store->exists_bl_sn(machine_name, last_committed+1)) {
-    mon->store->get_bl_sn(bl, machine_name, last_committed+1);
+  if (mon->ostore->exists(machine_name, last_committed+1)) {
+    mon->ostore->get(machine_name, last_committed+1, bl);
     assert(bl.length() > 0);
     dout(10) << " sharing our accepted but uncommitted value for " 
 	     << last_committed+1 << " (" << bl.length() << " bytes)" << dendl;
@@ -182,7 +182,7 @@ void Paxos::share_state(MMonPaxos *m, version_t peer_first_committed,
   // include incrementals
   for ( ; v <= last_committed; v++) {
     if (mon->store->exists_bl_sn(machine_name, v)) {
-      mon->store->get_bl_sn(m->values[v], machine_name, v);
+      mon->ostore->get(machine_name, v, m->values[v]);
       dout(10) << " sharing " << v << " (" 
 	       << m->values[v].length() << " bytes)" << dendl;
    }
@@ -209,9 +209,10 @@ void Paxos::store_state(MMonPaxos *m)
 
     first_committed = m->latest_version;
     last_committed = m->latest_version;
-    mon->store->put_bl_sn(start->second, machine_name, m->latest_version);
-    mon->store->put_int(first_committed, machine_name, "first_committed");
-    mon->store->put_int(last_committed, machine_name, "last_committed");
+    mon->ostore->put(machine_name, m->latest_version, start->second);
+    mon->ostore->put(machine_name, "first_committed", first_committed);
+    mon->ostore->put(machine_name, "last_committed", last_committed);
+
   }
 
   // build map of values to store
@@ -241,10 +242,9 @@ void Paxos::store_state(MMonPaxos *m)
   } else {
     dout(10) << "store_state [" << start->first << ".." 
 	     << last_committed << "]" << dendl;
-
-    mon->store->put_bl_sn_map(machine_name, start, end);
-    mon->store->put_int(last_committed, machine_name, "last_committed");
-    mon->store->put_int(first_committed, machine_name, "first_committed");
+    mon->ostore->put(machine_name, start, end);
+    mon->ostore->put(machine_name, "last_committed", last_committed);
+    mon->ostore->put(machine_name, "first_committed", first_committed);
   }
 }
 
@@ -376,7 +376,7 @@ void Paxos::begin(bufferlist& v)
   accepted.clear();
   accepted.insert(mon->rank);
   new_value = v;
-  mon->store->put_bl_sn(new_value, machine_name, last_committed+1);
+  mon->ostore->put(machine_name, last_committed+1, new_value);
 
   if (mon->get_quorum().size() == 1) {
     // we're alone, take it easy
@@ -431,7 +431,7 @@ void Paxos::handle_begin(MMonPaxos *begin)
   // yes.
   version_t v = last_committed+1;
   dout(10) << "accepting value for " << v << " pn " << accepted_pn << dendl;
-  mon->store->put_bl_sn(begin->values[v], machine_name, v);
+  mon->ostore->put(machine_name, v, begin->values[v]);
   
   // reply
   MMonPaxos *accept = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_ACCEPT,
@@ -518,10 +518,10 @@ void Paxos::commit()
   // commit locally
   last_committed++;
   last_commit_time = ceph_clock_now(g_ceph_context);
-  mon->store->put_int(last_committed, machine_name, "last_committed");
+  mon->ostore->put(machine_name, "last_committed", last_committed);
   if (!first_committed) {
     first_committed = last_committed;
-    mon->store->put_int(last_committed, machine_name, "first_committed");
+    mon->ostore->put(machine_name, "first_committed", last_committed);
   }
 
   // tell everyone
@@ -748,14 +748,14 @@ void Paxos::trim_to(version_t first, bool force)
   while (first_committed < first &&
 	 (force || first_committed < latest_stashed)) {
     dout(10) << "trim " << first_committed << dendl;
-    mon->store->erase_sn(machine_name, first_committed);
+    mon->ostore->erase(machine_name, first_committed);
     for (list<string>::iterator p = extra_state_dirs.begin();
 	 p != extra_state_dirs.end();
 	 ++p)
-      mon->store->erase_sn(p->c_str(), first_committed);
+      mon->ostore->erase(p->c_str(), first_committed);
     first_committed++;
   }
-  mon->store->put_int(first_committed, machine_name, "first_committed");
+  mon->ostore->put(machine_name, "first_committed", first_committed);
 }
 
 /*
@@ -773,7 +773,7 @@ version_t Paxos::get_new_proposal_number(version_t gt)
   last_pn += (version_t)mon->rank;
   
   // write
-  mon->store->put_int(last_pn, machine_name, "last_pn");
+  mon->ostore->put(machine_name, "last_pn", last_pn);
 
   dout(10) << "get_new_proposal_number = " << last_pn << dendl;
   return last_pn;
@@ -920,7 +920,7 @@ bool Paxos::is_readable(version_t v)
 
 bool Paxos::read(version_t v, bufferlist &bl)
 {
-  if (!mon->store->get_bl_sn(bl, machine_name, v))
+  if (!mon->ostore->get(machine_name, v, bl))
     return false;
   return true;
 }
@@ -987,7 +987,7 @@ void Paxos::stash_latest(version_t v, bufferlist& bl)
   ::encode(bl, final);
   
   dout(10) << "stash_latest v" << v << " len " << bl.length() << dendl;
-  mon->store->put_bl_ss(final, machine_name, "latest");
+  mon->ostore->put(machine_name, "latest", final);
 
   latest_stashed = v;
 }
@@ -995,7 +995,7 @@ void Paxos::stash_latest(version_t v, bufferlist& bl)
 version_t Paxos::get_stashed(bufferlist& bl)
 {
   bufferlist full;
-  if (mon->store->get_bl_ss(full, machine_name, "latest") <= 0) {
+  if (mon->ostore->get(machine_name, "latest", full)) {
     dout(10) << "get_stashed not found" << dendl;
     return 0;
   }
@@ -1030,7 +1030,7 @@ void Paxos::start_slurping()
 {
   if (slurping != 1) {
     slurping = 1;
-    mon->store->put_int(1, machine_name, "slurping");
+    mon->ostore->put(machine_name, "slurping", 1);
   }
 }
 
@@ -1038,7 +1038,7 @@ void Paxos::end_slurping()
 {
   if (slurping == 1) {
     slurping = 0;
-    mon->store->put_int(slurping, machine_name, "slurping");
+    mon->ostore->put(machine_name, "slurping", slurping);
   }
   assert(is_consistent());
 }
