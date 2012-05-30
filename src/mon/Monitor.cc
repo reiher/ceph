@@ -310,7 +310,7 @@ int Monitor::init()
 
   // we need to bootstrap authentication keys so we can form an
   // initial quorum.
-  if (authmon()->paxos->get_version() == 0) {
+  if (authmon()->get_version() == 0) {
     dout(10) << "loading initial keyring to bootstrap authentication for mkfs" << dendl;
     bufferlist bl;
     ostore->get("mkfs", "keyring", bl);
@@ -1845,13 +1845,13 @@ void Monitor::handle_get_version(MMonGetVersion *m)
   reply->handle = m->handle;
   if (m->what == "mdsmap") {
     reply->version = mdsmon()->mdsmap.get_epoch();
-    reply->oldest_version = mdsmon()->paxos->get_first_committed();
+    reply->oldest_version = mdsmon()->get_first_committed();
   } else if (m->what == "osdmap") {
     reply->version = osdmon()->osdmap.get_epoch();
-    reply->oldest_version = osdmon()->paxos->get_first_committed();
+    reply->oldest_version = osdmon()->get_first_committed();
   } else if (m->what == "monmap") {
     reply->version = monmap->get_epoch();
-    reply->oldest_version = monmon()->paxos->get_first_committed();
+    reply->oldest_version = monmon()->get_first_committed();
   } else {
     derr << "invalid map type " << m->what << dendl;
   }

@@ -334,8 +334,6 @@ public:
   virtual void get_health(list<pair<health_status_t,string> >& summary,
 			  list<pair<health_status_t,string> > *detail) const { }
 
- protected:
-
   /**
    * Get our version.
    *
@@ -344,6 +342,18 @@ public:
    * @returns Our version.
    */
   version_t get_version() { return paxos->get_version(); }
+  version_t get_first_committed() { return paxos->get_first_committed(); }
+  version_t get_stashed(bufferlist& bl) { return paxos->get_stashed(bl); }
+  version_t get_stashed_version() { return paxos->get_stashed_version(); }
+
+  void stash_latest(ObjectStore::Transaction *t, version_t v, bufferlist& bl) {
+    paxos->stash_latest(t, v, bl);
+  }
+  void stash_latest(version_t v, bufferlist& bl) {
+    paxos->stash_latest(v, bl);
+  }
+
+ protected:
 
   /**
    * @defgroup PaxosService_h_store_funcs Back storage interface functions
