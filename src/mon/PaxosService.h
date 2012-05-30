@@ -17,6 +17,7 @@
 
 #include "messages/PaxosServiceMessage.h"
 #include "include/Context.h"
+#include "Paxos.h"
 
 class Monitor;
 class Paxos;
@@ -333,6 +334,44 @@ public:
   virtual void get_health(list<pair<health_status_t,string> >& summary,
 			  list<pair<health_status_t,string> > *detail) const { }
 
+ protected:
+
+  /**
+   * Get our version.
+   *
+   * @remarks currently we simply defer to Paxos
+   *
+   * @returns Our version.
+   */
+  version_t get_version() { return paxos->get_version(); }
+
+  /**
+   * @defgroup PaxosService_h_store_funcs Back storage interface functions
+   * @{
+   */
+  /**
+   * @defgroup PaxosService_h_store_funcs_write Write
+   * @{
+   */
+  int put(string dir, string name, bufferlist& bl);
+  int put(string dir, version_t ver, bufferlist& bl);
+  int put(string dir, string name, version_t ver);
+  int append(string dir, string name, bufferlist& bl);
+  int erase(string dir, string name);
+  int erase(string dir, version_t ver);
+  /**
+   * @}
+   */
+  /**
+   * @defgroup PaxosService_h_store_funcs_read Read
+   * @{
+   */
+  int get(string dir, string name, bufferlist& bl);
+  int get(string dir, version_t ver, bufferlist& bl);
+  version_t get(string dir, string name);
+  /**
+   * @}
+   */
   /**
    * @}
    */

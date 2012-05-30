@@ -15,7 +15,7 @@
 #include "PaxosService.h"
 #include "common/Clock.h"
 #include "Monitor.h"
-
+#include "MonitorObjectStore.h"
 
 
 #include "common/config.h"
@@ -33,7 +33,6 @@ const char *PaxosService::get_machine_name()
 {
   return paxos->get_machine_name();
 }
-
 
 bool PaxosService::dispatch(PaxosServiceMessage *m)
 {
@@ -205,4 +204,49 @@ void PaxosService::shutdown()
     mon->timer.cancel_event(proposal_timer);
     proposal_timer = 0;
   }
+}
+
+int PaxosService::put(string dir, string name, bufferlist& bl)
+{
+  return mon->ostore->put(dir, name, bl);
+}
+
+int PaxosService::put(string dir, version_t ver, bufferlist& bl)
+{
+  return mon->ostore->put(dir, ver, bl);
+}
+
+int PaxosService::put(string dir, string name, version_t ver)
+{
+  return mon->ostore->put(dir, name, ver);
+}
+
+int PaxosService::append(string dir, string name, bufferlist& bl)
+{
+  return mon->ostore->append(dir, name, bl);
+}
+
+int PaxosService::erase(string dir, string name)
+{
+  return mon->ostore->erase(dir, name);
+}
+
+int PaxosService::erase(string dir, version_t ver)
+{
+  return mon->ostore->erase(dir, ver);
+}
+
+int PaxosService::get(string dir, string name, bufferlist& bl)
+{
+  return mon->ostore->get(dir, name, bl);
+}
+
+int PaxosService::get(string dir, version_t ver, bufferlist& bl)
+{
+  return mon->ostore->get(dir, ver, bl);
+}
+
+version_t PaxosService::get(string dir, string name)
+{
+  return mon->ostore->get(dir, name);
 }
