@@ -37,9 +37,13 @@ coll_t MonitorObjectStore::_get_coll(ObjectStore::Transaction *t, string dir)
 {
   coll_t coll((dir.empty() ? DEFAULT_DIR : dir));
 
+  /* This is error prone. Better deal with the missing collections than dealing
+   * with EEXISTS all over the place!
+   *
   if (!collection_exists(coll)) {
     t->create_collection(coll);
   }
+  */
 
   return coll;
 }

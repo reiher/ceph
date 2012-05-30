@@ -1045,6 +1045,10 @@ bool Paxos::is_consistent()
   if (slurping != 0)
     consistent = false;
 
+  if (!(consistent || (slurping == 1))) {
+    dout(5) << "consistent: " << consistent 
+	    << " slurping: " << slurping << dendl;
+  }
   assert(consistent || (slurping == 1));
   return consistent;
 }
