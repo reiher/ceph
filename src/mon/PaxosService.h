@@ -41,7 +41,12 @@ public:
    * The Paxos instance to which this class is associated with
    */
   Paxos *paxos;
-  
+  /**
+   * Our name. This will be associated with the class implementing us, and will
+   * be used mainly for store-related operations.
+   */
+  string service_name;
+
 protected:
   /**
    * @defgroup PaxosService_h_callbacks Callback classes
@@ -121,18 +126,20 @@ public:
   /**
    * @param mn A Monitor instance
    * @param p A Paxos instance
+   * @parem name Our service's name.
    */
-  PaxosService(Monitor *mn, Paxos *p) : mon(mn), paxos(p),
-					proposal_timer(0),
-					have_pending(false) { }
+  PaxosService(Monitor *mn, Paxos *p, string name) 
+    : mon(mn), paxos(p), proposal_timer(0),
+      have_pending(false), service_name(name) { }
+
   virtual ~PaxosService() {}
 
   /**
-   * Get the machine name.
+   * Get the service's name.
    *
-   * @returns The machine name.
+   * @returns The service's name.
    */
-  const char *get_machine_name();
+  string get_service_name() { return service_name; }
   
   // i implement and you ignore
   /**
@@ -160,6 +167,10 @@ public:
    * will cancel the proposal_timer event if any exists.
    */
   void shutdown();
+  /**
+   * Initiate the FS state expected by the service, if needed.
+   */
+  void init();
 
 private:
   /**
@@ -242,9 +253,9 @@ public:
    *
    * @invariant This function is only called on a Leader.
    *
-   * @param[out] bl A bufferlist containing the encoded pending state
+   * @param t The transaction to hold all changes.
    */
-  virtual void encode_pending(bufferlist& bl) = 0;
+  virtual void encode_pending(ObjectStore::Transaction *t) = 0;
 
   /**
    * Discard the pending state
@@ -343,15 +354,9 @@ public:
    */
   version_t get_version() { return paxos->get_version(); }
   version_t get_first_committed() { return paxos->get_first_committed(); }
-  version_t get_stashed(bufferlist& bl) { return paxos->get_stashed(bl); }
-  version_t get_stashed_version() { return paxos->get_stashed_version(); }
 
-  void stash_latest(ObjectStore::Transaction *t, version_t v, bufferlist& bl) {
-    paxos->stash_latest(t, v, bl);
-  }
-  void stash_latest(version_t v, bufferlist& bl) {
-    paxos->stash_latest(v, bl);
-  }
+ private:
+  const string last_committed_name = "last_committed";
 
  protected:
 
@@ -360,12 +365,127 @@ public:
    * @{
    */
   /**
+   * Obtain the collection to be used as our private paxos directory.
+   *
+   * This collection will have a name similar to FOO_paxos, assuming FOO as
+   * this service's name (which should have been defined when the class was
+   * created).
+   *
+   * @returns A collection.
+   */
+  coll_t get_paxos_sandbox() {
+    ostringstream os;
+    os << get_service_name() << "_paxos";
+    return coll_t(os.str());
+  }
+  /**
    * @defgroup PaxosService_h_store_funcs_write Write
    * @{
    */
-  int put(string dir, string name, bufferlist& bl);
-  int put(string dir, version_t ver, bufferlist& bl);
-  int put(string dir, string name, version_t ver);
+
+  void put_last_committed(ObjectStore::Transaction *t, version_t ver);
+  void put_version(ObjectStore::Transaction *t, version_t ver, bufferlist& bl);
+  void put_version(ObjectStore::Transaction *t, 
+		   version_t ver, string suffix, bufferlist& bl);
+
+  version_t get_last_committed();
+  int get_version(version_t ver, bufferlist& bl);
+  int get_version(version_t ver, string suffix, bufferlist& bl);
+
+
+  /**
+   * Add the operation to a transaction @p t
+   *
+   * @param t The transaction to which we'll add this operation
+   * @param ver The version to write to
+   * @param bl The bufferlist to be written to @p ver
+   */
+  void put(ObjectStore::Transaction *t, version_t ver, bufferlist& bl);
+  /**
+   * Add the operation to a transaction @p t
+   *
+   * @param t The transaction to which we'll add this operation
+   * @param name The file's name to be written to
+   * @param bl The bufferlist to be written to @p name
+   */
+  void put(ObjectStore::Transaction *t, string name, version_t ver);
+  /**
+   * Write a bufferlist @p bl to a given file.
+   *
+   * This function maintains the semantics of writing a file @p name on a
+   * given directory. However, since we are using an object store to maintain
+   * our state, and because we are sandboxed to a single collection, what we
+   * actually do is write to a file of the form @p name_suffix
+   *
+   * This allows us to easily differentiate between, e.g., an incremental map
+   * from a full map for the same version (i.e., 1_full, 1_inc).
+   *
+   * @param suffix The file's suffix.
+   * @param name The file's name.
+   * @param bl A bufferlist with the contents to be written.
+   * @returns 0 in case of success; < 0 otherwise.
+   */
+  int put(string suffix, string name, bufferlist& bl);
+  /**
+   * Write a bufferlist @p bl to a given file.
+   *
+   * This function maintains the semantics of writing a version to a file @p ver
+   * on a given directory. However, since we are using an object store to
+   * maintain our state, and because we are sandboxed to a single collection,
+   * what we actually do is write to a file of the form @p version_suffix
+   *
+   * This allows us to easily differentiate between, e.g., an incremental map
+   * from a full map for the same version (i.e., 1_full, 1_inc).
+   *
+   * @param suffix The file's suffix.
+   * @param ver The version being written.
+   * @param bl A bufferlist with the contents to be written.
+   * @returns 0 in case of success; < 0 otherwise.
+   */
+  int put(string suffix, version_t ver, bufferlist& bl);
+  /**
+   * Write a version @p ver to a given file.
+   *
+   * This function maintains the semantics of writing a version to a file
+   * @p name on a given directory. However, since we are using an object store
+   * to maintain our state, and because we are sandboxed to a single collection,
+   * what we actually do is write to a file of the form @p name_suffix
+   *
+   * This allows us to easily differentiate between, e.g., an incremental map
+   * from a full map for the same version (i.e., 1_full, 1_inc).
+   *
+   * @param suffix The file's suffix.
+   * @param name The file's name.
+   * @param ver The version being written
+   * @returns 0 in case of success; < 0 otherwise.
+   */
+  int put(string suffix, string name, version_t ver);
+
+  /**
+   * Write a bufferlist @p bl to a file with name @p name
+   *
+   * @param name The file's name.
+   * @param bl The bufferlist to be written to the file.
+   * @returns 0 in case of success; < 0 otherwise.
+   */
+  int put(string name, bufferlist& bl);
+  /**
+   * Write a bufferlist @p bl for a version @p ver to a file.
+   *
+   * @param ver The version being written.
+   * @param bl The bufferlist to be written for this given version.
+   * @returns 0 in case of success; < 0 otherwise.
+   */
+  int put(version_t ver, bufferlist& bl);
+  /**
+   * Write a version @p ver to a file with name @p name
+   *
+   * @param name The file's name.
+   * @param ver The version to be written to the file.
+   * @returns 0 in case of success; < 0 otherwise.
+   */
+  int put(string name, version_t ver);
+
   int append(string dir, string name, bufferlist& bl);
   int erase(string dir, string name);
   int erase(string dir, version_t ver);
@@ -376,9 +496,14 @@ public:
    * @defgroup PaxosService_h_store_funcs_read Read
    * @{
    */
-  int get(string dir, string name, bufferlist& bl);
-  int get(string dir, version_t ver, bufferlist& bl);
-  version_t get(string dir, string name);
+  int get(string suffix, string name, bufferlist& bl);
+  int get(string suffix, version_t ver, bufferlist& bl);
+  version_t get(string suffix, string name);
+
+  int get(string name, bufferlist& bl);
+  int get(version_t ver, bufferlist& bl);
+  version_t get(string name);
+
   /**
    * @}
    */

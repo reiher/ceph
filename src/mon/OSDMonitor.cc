@@ -57,8 +57,8 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, OSDMap& osdmap) {
 
 
 /************ MAPS ****************/
-OSDMonitor::OSDMonitor(Monitor *mn, Paxos *p)
-  : PaxosService(mn, p),
+OSDMonitor::OSDMonitor(Monitor *mn, Paxos *p, string service_name)
+  : PaxosService(mn, p, service_name),
     thrash_map(0), thrash_last_up_osd(-1)
 {
   // we need to trim this too
@@ -73,6 +73,11 @@ void OSDMonitor::create_initial()
   OSDMap newmap;
 
   bufferlist bl;
+
+  /**
+   * @todo we have yet to figure out what to do with all the mkfs thingies.
+   */
+  assert(0);
   get("mkfs", "osdmap", bl);
   if (bl.length()) {
     newmap.decode(bl);
@@ -98,9 +103,9 @@ void OSDMonitor::update_from_paxos()
   dout(15) << "update_from_paxos paxos e " << paxosv 
 	   << ", my e " << osdmap.epoch << dendl;
 
-  if (osdmap.epoch != paxos->get_stashed_version()) {
+  if (osdmap.epoch != get_stashed_version()) {
     bufferlist latest;
-    version_t v = paxos->get_stashed(latest);
+    version_t v = get_stashed(latest);
     dout(7) << "update_from_paxos loading latest full map e" << v << dendl;
     osdmap.decode(latest);
   } 
@@ -118,7 +123,8 @@ void OSDMonitor::update_from_paxos()
     // write out the full map for all past epochs
     bl.clear();
     osdmap.encode(bl);
-    put("osdmap_full", osdmap.epoch, bl);
+    put("full", osdmap.epoch, bl);
+//    put("osdmap_full", osdmap.epoch, bl);
 
     // share
     dout(1) << osdmap << dendl;
@@ -354,14 +360,19 @@ void OSDMonitor::create_pending()
   remove_redundant_pg_temp();
 }
 
-
-void OSDMonitor::encode_pending(bufferlist &bl)
+/**
+ * @note receiving a transaction in this function gives a fair amount of
+ * freedom to the service implementation if it does need it. It shouldn't.
+ */
+void OSDMonitor::encode_pending(ObjectStore::Transaction *t)
 {
   dout(10) << "encode_pending e " << pending_inc.epoch
 	   << dendl;
   
   // finalize up pending_inc
   pending_inc.modified = ceph_clock_now(g_ceph_context);
+
+  bufferlist bl;
 
   // tell me about it
   for (map<int32_t,uint8_t>::iterator i = pending_inc.new_state.begin();
@@ -376,7 +387,8 @@ void OSDMonitor::encode_pending(bufferlist &bl)
   for (map<int32_t,entity_addr_t>::iterator i = pending_inc.new_up_client.begin();
        i != pending_inc.new_up_client.end();
        i++) { 
-    dout(2) << " osd." << i->first << " UP " << i->second << dendl; //FIXME: insert cluster addresses too
+    //FIXME: insert cluster addresses too
+    dout(2) << " osd." << i->first << " UP " << i->second << dendl;
   }
   for (map<int32_t,uint32_t>::iterator i = pending_inc.new_weight.begin();
        i != pending_inc.new_weight.end();
@@ -393,6 +405,10 @@ void OSDMonitor::encode_pending(bufferlist &bl)
   // encode
   assert(get_version() + 1 == pending_inc.epoch);
   ::encode(pending_inc, bl, CEPH_FEATURES_ALL);
+
+  /* put everything in the transaction */
+  put_version(t, pending_inc.epoch, bl);
+  put_last_committed(t, pending_inc.epoch);
 }
 
 
@@ -402,7 +418,8 @@ void OSDMonitor::share_map_with_random_osd()
   MonSession *s = mon->session_map.get_random_osd_session();
   if (s) {
     dout(10) << "committed, telling random " << s->inst << " all about it" << dendl;
-    MOSDMap *m = build_incremental(osdmap.get_epoch() - 1, osdmap.get_epoch());  // whatev, they'll request more if they need it
+    // whatev, they'll request more if they need it
+    MOSDMap *m = build_incremental(osdmap.get_epoch() - 1, osdmap.get_epoch());
     mon->messenger->send_message(m, s->inst);
   }
 }
@@ -1122,11 +1139,13 @@ MOSDMap *OSDMonitor::build_incremental(epoch_t from, epoch_t to)
        e >= from && e > 0;
        e--) {
     bufferlist bl;
-    if (get("osdmap", e, bl) > 0) {
+//    if (get("osdmap", e, bl) > 0) {
+    if (get(e, bl) > 0) {
       dout(20) << "build_incremental    inc " << e << " " << bl.length() << " bytes" << dendl;
       m->incremental_maps[e] = bl;
     }
-    else if (get("osdmap_full", e, bl) > 0) {
+//    else if (get("osdmap_full", e, bl) > 0) {
+    else if (get("full", e, bl) > 0) {
       dout(20) << "build_incremental   full " << e << " " << bl.length() << " bytes" << dendl;
       m->maps[e] = bl;
     }
@@ -1150,7 +1169,8 @@ void OSDMonitor::send_incremental(PaxosServiceMessage *req, epoch_t first)
   if (first < paxos->get_first_committed()) {
     first = paxos->get_first_committed();
     bufferlist bl;
-    get("osdmap_full", first, bl);
+//    get("osdmap_full", first, bl);
+    get("full", first, bl);
     dout(20) << "send_incremental starting with base full " << first << " " << bl.length() << " bytes" << dendl;
     MOSDMap *m = new MOSDMap(osdmap.get_fsid());
     m->oldest_map = paxos->get_first_committed();
@@ -1177,7 +1197,8 @@ void OSDMonitor::send_incremental(epoch_t first, entity_inst_t& dest, bool oneti
   if (first < paxos->get_first_committed()) {
     first = paxos->get_first_committed();
     bufferlist bl;
-    get("osdmap_full", first, bl);
+//    get("osdmap_full", first, bl);
+    get("full", first, bl);
     dout(20) << "send_incremental starting with base full " << first << " " << bl.length() << " bytes" << dendl;
     MOSDMap *m = new MOSDMap(osdmap.get_fsid());
     m->oldest_map = paxos->get_first_committed();
@@ -1491,7 +1512,8 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
       OSDMap *p = &osdmap;
       if (epoch) {
 	bufferlist b;
-	get("osdmap_full", epoch, b);
+//	get("osdmap_full", epoch, b);
+	get("full", epoch, b);
 	if (!b.length()) {
 	  p = 0;
 	  r = -ENOENT;

@@ -29,11 +29,6 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, Paxos *paxos, int mac
 		<< ").paxosservice(" << get_paxos_name(machine_id) << ") ";
 }
 
-const char *PaxosService::get_machine_name()
-{
-  return paxos->get_machine_name();
-}
-
 bool PaxosService::dispatch(PaxosServiceMessage *m)
 {
   dout(10) << "dispatch " << *m << " from " << m->get_orig_source_inst() << dendl;
@@ -123,9 +118,12 @@ void PaxosService::propose_pending()
    *	   to encode whatever is pending on the implementation class into a
    *	   bufferlist, so we can then propose that as a value through Paxos.
    */
+  ObjectStore::Transaction t;
   bufferlist bl;
-  encode_pending(bl);
+  encode_pending(&t);
   have_pending = false;
+
+  t->encode(bl);
 
   // apply to paxos
   paxos->wait_for_commit_front(new C_Active(this));
@@ -205,6 +203,29 @@ void PaxosService::shutdown()
     proposal_timer = 0;
   }
 }
+
+void PaxosService::init()
+{
+  ObjectStore::Transaction t;
+
+  coll_t service_coll = coll_t(get_service_name());
+  if (!mon->ostore->collection_exists(service_coll))
+    t.create_collection(service_coll);
+
+  if (!t.empty())
+    mon->ostore->apply_transaction(t);
+}
+
+/**
+ * @note 2self: This interface is becoming way too overengineered.
+ */
+
+void PaxosService::put(ObjectStore::Transaction *t,
+		       version_t ver, bufferlist& bl)
+{
+  mon->ostore->put(t, get_paxos_sandbox(), ver, bl);
+}
+
 
 int PaxosService::put(string dir, string name, bufferlist& bl)
 {

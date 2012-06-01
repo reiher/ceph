@@ -77,8 +77,7 @@ class Paxos {
   Monitor *mon;
 
   // my state machine info
-  int machine_id;
-  const char *machine_name;
+  const char *paxos_name;
 
   friend class Monitor;
   friend class PaxosService;
@@ -833,10 +832,9 @@ public:
    * @param m A monitor
    * @param mid A machine id
    */
-  Paxos(Monitor *m,
-	int mid) : mon(m),
-		   machine_id(mid), 
-		   machine_name(get_paxos_name(mid)),
+  Paxos(Monitor *m, const char *name) 
+		 : mon(m),
+		   paxos_name(name),
 		   state(STATE_RECOVERING),
 		   first_committed(0),
 		   last_pn(0),
@@ -851,8 +849,8 @@ public:
 		   accept_timeout_event(0),
 		   clock_drift_warned(0) { }
 
-  const char *get_machine_name() const {
-    return machine_name;
+  const char *get_paxos_name() const {
+    return paxos_name;
   }
 
   void dispatch(PaxosServiceMessage *m);

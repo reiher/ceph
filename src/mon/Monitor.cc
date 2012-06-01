@@ -109,42 +109,26 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorObjectStore *os,
   leader(0),
   probe_timeout_event(NULL),
 
-  paxos(PAXOS_NUM), paxos_service(PAXOS_NUM),
+  paxos_service(PAXOS_NUM),
   admin_hook(NULL),
   routed_request_tid(0)
 {
   rank = -1;
 
-  paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, add_paxos(PAXOS_MDSMAP));
-  paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, add_paxos(PAXOS_MONMAP));
-  paxos_service[PAXOS_OSDMAP] = new OSDMonitor(this, add_paxos(PAXOS_OSDMAP));
-  paxos_service[PAXOS_PGMAP] = new PGMonitor(this, add_paxos(PAXOS_PGMAP));
-  paxos_service[PAXOS_LOG] = new LogMonitor(this, add_paxos(PAXOS_LOG));
-  paxos_service[PAXOS_AUTH] = new AuthMonitor(this, add_paxos(PAXOS_AUTH));
+  paxos = new Paxos(this, "paxos"); 
+
+  paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, "mdsmap");
+  paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
+  paxos_service[PAXOS_OSDMAP] = new OSDMonitor(this, paxos, "osdmap");
+  paxos_service[PAXOS_PGMAP] = new PGMonitor(this, paxos, "pgmap");
+  paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "log");
+  paxos_service[PAXOS_AUTH] = new AuthMonitor(this, paxos, "auth");
 
   mon_caps = new MonCaps();
   mon_caps->set_allow_all(true);
   mon_caps->text = "allow *";
 
   exited_quorum = ceph_clock_now(g_ceph_context);
-}
-
-Paxos *Monitor::add_paxos(int type)
-{
-  Paxos *p = new Paxos(this, type);
-  paxos[type] = p;
-  return p;
-}
-
-Paxos *Monitor::get_paxos_by_name(const string& name)
-{
-  for (vector<Paxos*>::iterator p = paxos.begin();
-       p != paxos.end();
-       ++p) {
-    if ((*p)->machine_name == name)
-      return *p;
-  }
-  return NULL;
 }
 
 PaxosService *Monitor::get_paxos_service_by_name(const string& name)
@@ -170,8 +154,9 @@ Monitor::~Monitor()
 {
   for (vector<PaxosService*>::iterator p = paxos_service.begin(); p != paxos_service.end(); p++)
     delete *p;
-  for (vector<Paxos*>::iterator p = paxos.begin(); p != paxos.end(); p++)
-    delete *p;
+  
+  delete paxos;
+
   //clean out MonSessionMap's subscriptions
   for (map<string, xlist<Subscription*>* >::iterator i
 	 = session_map.subs.begin();
@@ -300,10 +285,11 @@ int Monitor::init()
     }
   }
 
+  paxos->init();
   // init paxos
   for (int i = 0; i < PAXOS_NUM; ++i) {
-    paxos[i]->init();
-    if (paxos[i]->is_consistent()) {
+    paxos_service[i]->init();
+    if (paxos->is_consistent()) {
       paxos_service[i]->update_from_paxos();
     } // else we don't do anything; handle_probe_reply will detect it's slurping
   }
@@ -543,8 +529,8 @@ void Monitor::reset()
   quorum.clear();
   outside_quorum.clear();
 
-  for (vector<Paxos*>::iterator p = paxos.begin(); p != paxos.end(); p++)
-    (*p)->restart();
+  paxos->restart();
+
   for (vector<PaxosService*>::iterator p = paxos_service.begin(); p != paxos_service.end(); p++)
     (*p)->restart();
 }
@@ -614,6 +600,9 @@ void Monitor::handle_probe(MMonProbe *m)
   }
 }
 
+/**
+ * @todo fix this. This is going to cause trouble.
+ */
 void Monitor::handle_probe_probe(MMonProbe *m)
 {
   dout(10) << "handle_probe_probe " << m->get_source_inst() << *m << dendl;

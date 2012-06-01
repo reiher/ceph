@@ -62,6 +62,7 @@ coll_t MonitorObjectStore::_get_coll(string dir)
 void MonitorObjectStore::put(ObjectStore::Transaction *t,
 			     coll_t coll, hobject_t obj, bufferlist& bl)
 {
+  t->truncate(coll, obj, 0);
   t->write(coll, obj, 0, bl.length(), bl);
 }
 

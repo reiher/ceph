@@ -170,6 +170,7 @@ public:
 
   // -- elector --
 private:
+  Paxos *paxos;
   Elector elector;
   friend class Elector;
   
@@ -223,12 +224,11 @@ public:
 
   void update_logger();
 
-  // -- paxos -- These vector indices are matched
-  vector<Paxos*> paxos;
+  /**
+   * Vector holding the Services serviced by this Monitor.
+   */
   vector<PaxosService*> paxos_service;
 
-  Paxos *add_paxos(int type);
-  Paxos *get_paxos_by_name(const string& name);
   PaxosService *get_paxos_service_by_name(const string& name);
 
   class PGMonitor *pgmon() {
