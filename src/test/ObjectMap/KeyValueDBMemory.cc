@@ -133,13 +133,25 @@ int KeyValueDBMemory::get_keys(const string &prefix,
 }
 
 int KeyValueDBMemory::set(const string &prefix,
+			  const string &key,
+			  const bufferlist &bl) {
+  db[prefix][key] = bl;
+  return 0;
+}
+
+int KeyValueDBMemory::set(const string &prefix,
 			  const map<string, bufferlist> &to_set) {
   for (map<string, bufferlist>::const_iterator i = to_set.begin();
        i != to_set.end();
        ++i) {
-    bufferlist bl = i->second;
-    db[prefix][i->first] = i->second;
+    set(prefix, i->first, i->second);
   }
+  return 0;
+}
+
+int KeyValueDBMemory::rmkey(const string &prefix,
+			    const string &key) {
+  db[prefix].erase(key);
   return 0;
 }
 
@@ -150,7 +162,7 @@ int KeyValueDBMemory::rmkeys(const string &prefix,
   for (std::set<string>::const_iterator i = keys.begin();
        i != keys.end();
        ++i) {
-    db[prefix].erase(*i);
+    rmkey(prefix, *i);
   }
   return 0;
 }
