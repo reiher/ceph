@@ -87,7 +87,7 @@ CompatSet get_ceph_mon_feature_compat_set()
 		   ceph_mon_feature_incompat);
 }
 
-Monitor::Monitor(CephContext* cct_, string nm, MonitorObjectStore *os,
+Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
 		 Messenger *m, MonMap *map) :
   Dispatcher(cct_),
   name(nm),
@@ -101,7 +101,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorObjectStore *os,
   clog(cct_, messenger, monmap, NULL, LogClient::FLAG_MON),
   key_server(cct),
   auth_supported(cct),
-  ostore(os),
+  store(s),
   
   state(STATE_PROBING),
   
@@ -256,7 +256,7 @@ int Monitor::init()
   // open compatset
   {
     bufferlist bl;
-    ostore->get(MonitorObjectStore::DEFAULT_DIR, COMPAT_SET_LOC, bl);
+    store->get(monitor_db_prefix, COMPAT_SET_LOC, bl);
     if (bl.length()) {
       bufferlist::iterator p = bl.begin();
       ::decode(features, p);
@@ -267,7 +267,7 @@ int Monitor::init()
   }
 
   // have we ever joined a quorum?
-  has_ever_joined = ostore->exists(MonitorObjectStore::DEFAULT_DIR, "joined");
+  has_ever_joined = (store->get(monitor_db_prefix, "joined") != 0);
   dout(10) << "has_ever_joined = " << (int)has_ever_joined << dendl;
 
   if (!has_ever_joined) {
@@ -288,7 +288,6 @@ int Monitor::init()
   paxos->init();
   // init paxos
   for (int i = 0; i < PAXOS_NUM; ++i) {
-    paxos_service[i]->init();
     if (paxos->is_consistent()) {
       paxos_service[i]->update_from_paxos();
     } // else we don't do anything; handle_probe_reply will detect it's slurping
@@ -299,7 +298,7 @@ int Monitor::init()
   if (authmon()->get_version() == 0) {
     dout(10) << "loading initial keyring to bootstrap authentication for mkfs" << dendl;
     bufferlist bl;
-    ostore->get("mkfs", "keyring", bl);
+    store->get("mkfs", "keyring", bl);
     KeyRing keyring;
     bufferlist::iterator p = bl.begin();
     ::decode(keyring, p);
@@ -829,13 +828,13 @@ MMonProbe *Monitor::fill_probe_data(MMonProbe *m, Paxos *pax)
   version_t v = MAX(pax->get_first_committed(), m->newest_version + 1);
   int len = 0;
   for (; v <= pax->get_version(); v++) {
-    len += ostore->get(m->machine_name.c_str(), v, 
+    len += store->get(m->machine_name.c_str(), v, 
 		       r->paxos_values[m->machine_name][v]);
 
     for (list<string>::iterator p = pax->extra_state_dirs.begin();
          p != pax->extra_state_dirs.end();
          ++p) {
-      len += ostore->get(p->c_str(), v, r->paxos_values[*p][v]);
+      len += store->get(p->c_str(), v, r->paxos_values[*p][v]);
     }
     if (len >= g_conf->mon_slurp_bytes)
       break;
@@ -886,17 +885,17 @@ void Monitor::handle_probe_data(MMonProbe *m)
     map<string, map<version_t,bufferlist> >::iterator p;
    
     // bundle everything on a single transaction
-    ObjectStore::Transaction t;
+    MonitorDBStore::Transaction t;
     
     for (p = m->paxos_values.begin(); p != m->paxos_values.end(); ++p) {
-      ostore->put(&t, p->first.c_str(), p->second.begin(), p->second.end());
+      store->put(&t, p->first.c_str(), p->second.begin(), p->second.end());
     }
 
     pax->last_committed = m->paxos_values.begin()->second.rbegin()->first;
-    ostore->put(&t, m->machine_name.c_str(), 
+    store->put(&t, m->machine_name.c_str(), 
 		"last_committed", pax->last_committed);
 
-    ostore->apply_transaction(t);
+    store->apply_transaction(t);
   }
 
   // latest?
@@ -1999,36 +1998,23 @@ void Monitor::tick()
  */
 int Monitor::mkfs(bufferlist& osdmapbl)
 {
-  // create it
-  int err = ostore->mkfs();
-  if (err) {
-    derr << "store->mkfs failed with: " << cpp_strerror(err) << dendl;
-    return err;
-  }
-
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  t->create_collection(MonitorObjectStore::DEFAULT_COLL);
-  t->create_collection(coll_t("mkfs"));
-  ostore->apply_transaction(*t);
-  
-  delete t;
-  t = new ObjectStore::Transaction;
+  MonitorDBStore::Transaction t;
 
   bufferlist magicbl;
   magicbl.append(CEPH_MON_ONDISK_MAGIC);
   magicbl.append("\n");
-  ostore->put(t, MonitorObjectStore::DEFAULT_DIR, "magic", magicbl);
+  store->put(&t, monitor_db_name, "magic", magicbl);
 
   bufferlist features;
   CompatSet mon_features = get_ceph_mon_feature_compat_set();
   mon_features.encode(features);
-  ostore->put(t, MonitorObjectStore::DEFAULT_DIR, COMPAT_SET_LOC, features);
+  store->put(&t, monitor_db_name, COMPAT_SET_LOC, features);
 
   // save monmap, osdmap, keyring.
   bufferlist monmapbl;
   monmap->encode(monmapbl, CEPH_FEATURES_ALL);
   monmap->set_epoch(0);     // must be 0 to avoid confusing first MonmapMonitor::update_from_paxos()
-  ostore->put(t, "mkfs", "monmap", monmapbl);
+  store->put(&t, "mkfs", "monmap", monmapbl);
 
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
@@ -2040,7 +2026,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
       derr << "error decoding provided osdmap: " << e.what() << dendl;
       return -EINVAL;
     }
-    ostore->put(t, "mkfs", "osdmap", osdmapbl);
+    store->put(&t, "mkfs", "osdmap", osdmapbl);
   }
 
   KeyRing keyring;
@@ -2055,9 +2041,8 @@ int Monitor::mkfs(bufferlist& osdmapbl)
 
   bufferlist keyringbl;
   keyring.encode_plaintext(keyringbl);
-  ostore->put(t, "mkfs", "keyring", keyringbl);
-  ostore->apply_transaction(*t);
-  delete t;
+  store->put(&t, "mkfs", "keyring", keyringbl);
+  store->apply_transaction(t);
 
   return 0;
 }

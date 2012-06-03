@@ -104,6 +104,20 @@ class MonitorDBStore
       ::decode(ops, bl);
       DECODE_FINISH(bl);
     }
+
+    void append(Transaction& other) {
+      ops.splice(ops.end(), other.ops);
+    }
+
+    void append_from_encoded(bufferlist& bl) {
+      Transaction other;
+      other.decode(bl.begin());
+      append(other);
+    }
+
+    bool empty() {
+      return (ops.size() == 0);
+    }
   };
 
   int apply_transaction(MonitorDBStore::Transaction& t) {
@@ -128,7 +142,15 @@ class MonitorDBStore
   }
 
   int get(string prefix, string key, bufferlist& bl) {
-    return db->get(prefix, key, bl);
+    set<string> k;
+    k.push_back(key);
+    map<string,bufferlist> out;
+
+    db->get(prefix, k, out);
+    if (!out.empty())
+      bl.append(out[key]);
+
+    return 0;
   }
 
   int get(string prefix, version_t ver, bufferlist& bl) {
@@ -139,13 +161,35 @@ class MonitorDBStore
 
   version_t get(string prefix, string key) {
     bufferlist bl;
-    int err = get(prefix, key, bl);
-    if (err < 0)
-      return err;
-    
+    get(prefix, key, bl);
+    if (bl.empty()) // if key does not exist, assume its value is 0
+      return 0;
+   
     version_t ver;
     ::decode(ver, bl);
     return ver;
+  }
+
+  bool exists(const string prefix, const string key) {
+    Iterator it = db->iterator(prefix);
+    int err = it.lower_bound(key);
+    if (err < 0)
+      return false;
+
+    return (it.valid() && it.key() == key);
+  }
+
+  bool exists(const string prefix, version_t ver) {
+    ostringstream os;
+    os << ver;
+    return exists(prefix, os.str());
+  }
+
+  string combine_strings(const string& prefix, const string& value) {
+    string out = prefix;
+    out.push_back('_');
+    out.append(value);
+    return out;
   }
 
   MonitorDBStore(const string& path) {

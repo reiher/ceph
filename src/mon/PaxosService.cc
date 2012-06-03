@@ -204,70 +204,20 @@ void PaxosService::shutdown()
   }
 }
 
-void PaxosService::init()
+void PaxosService::put_version(MonitorDBStore::Transaction *t,
+			       string prefix, version_t ver, bufferlist& bl)
 {
-  ObjectStore::Transaction t;
-
-  coll_t service_coll = coll_t(get_service_name());
-  if (!mon->ostore->collection_exists(service_coll))
-    t.create_collection(service_coll);
-
-  if (!t.empty())
-    mon->ostore->apply_transaction(t);
+  ostringstream os;
+  os << ver;
+  string key = db->combine_strings(prefix, os.str());
+  t->put(get_service_name(), key, bl);
 }
 
-/**
- * @note 2self: This interface is becoming way too overengineered.
- */
-
-void PaxosService::put(ObjectStore::Transaction *t,
-		       version_t ver, bufferlist& bl)
+int PaxosService::get_version(string prefix, version_t ver, bufferlist& bl)
 {
-  mon->ostore->put(t, get_paxos_sandbox(), ver, bl);
+  ostringstream os;
+  os << ver;
+  string key = db->combine_strings(prefix, os.str());
+  return db->get(get_service_name(), key, bl);
 }
 
-
-int PaxosService::put(string dir, string name, bufferlist& bl)
-{
-  return mon->ostore->put(dir, name, bl);
-}
-
-int PaxosService::put(string dir, version_t ver, bufferlist& bl)
-{
-  return mon->ostore->put(dir, ver, bl);
-}
-
-int PaxosService::put(string dir, string name, version_t ver)
-{
-  return mon->ostore->put(dir, name, ver);
-}
-
-int PaxosService::append(string dir, string name, bufferlist& bl)
-{
-  return mon->ostore->append(dir, name, bl);
-}
-
-int PaxosService::erase(string dir, string name)
-{
-  return mon->ostore->erase(dir, name);
-}
-
-int PaxosService::erase(string dir, version_t ver)
-{
-  return mon->ostore->erase(dir, ver);
-}
-
-int PaxosService::get(string dir, string name, bufferlist& bl)
-{
-  return mon->ostore->get(dir, name, bl);
-}
-
-int PaxosService::get(string dir, version_t ver, bufferlist& bl)
-{
-  return mon->ostore->get(dir, ver, bl);
-}
-
-version_t PaxosService::get(string dir, string name)
-{
-  return mon->ostore->get(dir, name);
-}

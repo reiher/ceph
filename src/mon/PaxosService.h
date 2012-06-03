@@ -167,10 +167,6 @@ public:
    * will cancel the proposal_timer event if any exists.
    */
   void shutdown();
-  /**
-   * Initiate the FS state expected by the service, if needed.
-   */
-  void init();
 
 private:
   /**
@@ -255,7 +251,7 @@ public:
    *
    * @param t The transaction to hold all changes.
    */
-  virtual void encode_pending(ObjectStore::Transaction *t) = 0;
+  virtual void encode_pending(MonitorDBStore::Transaction *t) = 0;
 
   /**
    * Discard the pending state
@@ -345,18 +341,11 @@ public:
   virtual void get_health(list<pair<health_status_t,string> >& summary,
 			  list<pair<health_status_t,string> > *detail) const { }
 
-  /**
-   * Get our version.
-   *
-   * @remarks currently we simply defer to Paxos
-   *
-   * @returns Our version.
-   */
-  version_t get_version() { return paxos->get_version(); }
-  version_t get_first_committed() { return paxos->get_first_committed(); }
-
  private:
   const string last_committed_name = "last_committed";
+  const string first_committed_name = "first_committed";
+  const string last_accepted_name = "last_accepted";
+  const string mkfs_name = "mkfs";
 
  protected:
 
@@ -364,149 +353,45 @@ public:
    * @defgroup PaxosService_h_store_funcs Back storage interface functions
    * @{
    */
-  /**
-   * Obtain the collection to be used as our private paxos directory.
-   *
-   * This collection will have a name similar to FOO_paxos, assuming FOO as
-   * this service's name (which should have been defined when the class was
-   * created).
-   *
-   * @returns A collection.
-   */
-  coll_t get_paxos_sandbox() {
-    ostringstream os;
-    os << get_service_name() << "_paxos";
-    return coll_t(os.str());
+  void put_last_committed(MonitorDBStore::Transaction *t, version_t ver) {
+    t->put(get_service_name(), last_committed_name, ver);
   }
-  /**
-   * @defgroup PaxosService_h_store_funcs_write Write
-   * @{
-   */
 
-  void put_last_committed(ObjectStore::Transaction *t, version_t ver);
-  void put_version(ObjectStore::Transaction *t, version_t ver, bufferlist& bl);
-  void put_version(ObjectStore::Transaction *t, 
-		   version_t ver, string suffix, bufferlist& bl);
+  void put_version(MonitorDBStore::Transaction *t, version_t ver,
+		   bufferlist& bl) {
+    t->put(get_service_name(), ver, bl);
+  }
 
-  version_t get_last_committed();
-  int get_version(version_t ver, bufferlist& bl);
-  int get_version(version_t ver, string suffix, bufferlist& bl);
+  void put_version(MonitorDBStore::Transaction *t, 
+		   string prefix, version_t ver, bufferlist& bl);
+
+  void erase_mkfs(MonitorDBStore::Transaction *t) {
+    t->erase(mkfs_name, get_service_name());
+  }
+
+  version_t get_first_committed() {
+    return mon->store->get(get_service_name(), first_committed_name);
+  }
+
+  version_t get_last_committed() {
+    return mon->store->get(get_service_name(), last_committed_name);
+  }
+
+  version_t get_version() {
+    return get_last_committed();
+  }
+
+  int get_version(version_t ver, bufferlist& bl) {
+    return mon->store->get(get_service_name(), ver, bl);
+  }
+
+  int get_version(string prefix, version_t ver, bufferlist& bl);
 
 
-  /**
-   * Add the operation to a transaction @p t
-   *
-   * @param t The transaction to which we'll add this operation
-   * @param ver The version to write to
-   * @param bl The bufferlist to be written to @p ver
-   */
-  void put(ObjectStore::Transaction *t, version_t ver, bufferlist& bl);
-  /**
-   * Add the operation to a transaction @p t
-   *
-   * @param t The transaction to which we'll add this operation
-   * @param name The file's name to be written to
-   * @param bl The bufferlist to be written to @p name
-   */
-  void put(ObjectStore::Transaction *t, string name, version_t ver);
-  /**
-   * Write a bufferlist @p bl to a given file.
-   *
-   * This function maintains the semantics of writing a file @p name on a
-   * given directory. However, since we are using an object store to maintain
-   * our state, and because we are sandboxed to a single collection, what we
-   * actually do is write to a file of the form @p name_suffix
-   *
-   * This allows us to easily differentiate between, e.g., an incremental map
-   * from a full map for the same version (i.e., 1_full, 1_inc).
-   *
-   * @param suffix The file's suffix.
-   * @param name The file's name.
-   * @param bl A bufferlist with the contents to be written.
-   * @returns 0 in case of success; < 0 otherwise.
-   */
-  int put(string suffix, string name, bufferlist& bl);
-  /**
-   * Write a bufferlist @p bl to a given file.
-   *
-   * This function maintains the semantics of writing a version to a file @p ver
-   * on a given directory. However, since we are using an object store to
-   * maintain our state, and because we are sandboxed to a single collection,
-   * what we actually do is write to a file of the form @p version_suffix
-   *
-   * This allows us to easily differentiate between, e.g., an incremental map
-   * from a full map for the same version (i.e., 1_full, 1_inc).
-   *
-   * @param suffix The file's suffix.
-   * @param ver The version being written.
-   * @param bl A bufferlist with the contents to be written.
-   * @returns 0 in case of success; < 0 otherwise.
-   */
-  int put(string suffix, version_t ver, bufferlist& bl);
-  /**
-   * Write a version @p ver to a given file.
-   *
-   * This function maintains the semantics of writing a version to a file
-   * @p name on a given directory. However, since we are using an object store
-   * to maintain our state, and because we are sandboxed to a single collection,
-   * what we actually do is write to a file of the form @p name_suffix
-   *
-   * This allows us to easily differentiate between, e.g., an incremental map
-   * from a full map for the same version (i.e., 1_full, 1_inc).
-   *
-   * @param suffix The file's suffix.
-   * @param name The file's name.
-   * @param ver The version being written
-   * @returns 0 in case of success; < 0 otherwise.
-   */
-  int put(string suffix, string name, version_t ver);
+  int get_mkfs(bufferlist& bl) {
+    return mon->store->get(mkfs_name, get_service_name(), bl);
+  }
 
-  /**
-   * Write a bufferlist @p bl to a file with name @p name
-   *
-   * @param name The file's name.
-   * @param bl The bufferlist to be written to the file.
-   * @returns 0 in case of success; < 0 otherwise.
-   */
-  int put(string name, bufferlist& bl);
-  /**
-   * Write a bufferlist @p bl for a version @p ver to a file.
-   *
-   * @param ver The version being written.
-   * @param bl The bufferlist to be written for this given version.
-   * @returns 0 in case of success; < 0 otherwise.
-   */
-  int put(version_t ver, bufferlist& bl);
-  /**
-   * Write a version @p ver to a file with name @p name
-   *
-   * @param name The file's name.
-   * @param ver The version to be written to the file.
-   * @returns 0 in case of success; < 0 otherwise.
-   */
-  int put(string name, version_t ver);
-
-  int append(string dir, string name, bufferlist& bl);
-  int erase(string dir, string name);
-  int erase(string dir, version_t ver);
-  /**
-   * @}
-   */
-  /**
-   * @defgroup PaxosService_h_store_funcs_read Read
-   * @{
-   */
-  int get(string suffix, string name, bufferlist& bl);
-  int get(string suffix, version_t ver, bufferlist& bl);
-  version_t get(string suffix, string name);
-
-  int get(string name, bufferlist& bl);
-  int get(version_t ver, bufferlist& bl);
-  version_t get(string name);
-
-  /**
-   * @}
-   */
   /**
    * @}
    */

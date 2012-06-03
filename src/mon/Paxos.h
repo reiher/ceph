@@ -77,7 +77,7 @@ class Paxos {
   Monitor *mon;
 
   // my state machine info
-  const char *paxos_name;
+  const string *paxos_name;
 
   friend class Monitor;
   friend class PaxosService;
@@ -832,7 +832,7 @@ public:
    * @param m A monitor
    * @param mid A machine id
    */
-  Paxos(Monitor *m, const char *name) 
+  Paxos(Monitor *m, const string name) 
 		 : mon(m),
 		   paxos_name(name),
 		   state(STATE_RECOVERING),
@@ -849,7 +849,7 @@ public:
 		   accept_timeout_event(0),
 		   clock_drift_warned(0) { }
 
-  const char *get_paxos_name() const {
+  const string get_name() const {
     return paxos_name;
   }
 
@@ -907,6 +907,21 @@ public:
    * @param m A message
    */
   void store_state(MMonPaxos *m);
+
+  /**
+   * Helper function of Paxos::store_state which will write all the values
+   * between two iterator positions to the underlying store.
+   *
+   * This function will also apply the transactions encoded in each of the
+   * bufferlists in the map.
+   *
+   * @param t A transaction
+   * @param start An iterator pointing to the first position we want
+   * @param end An iterator pointing to the last position we want
+   */
+  void store_state_write_map(MonitorDBStore::Transaction& t,
+			     map<version_t,bufferlist>::iterator start,
+			     map<version_t,bufferlist>::iterator end);
 
   /**
    * @todo This appears to be used only by the OSDMonitor, and I would say
@@ -1071,7 +1086,6 @@ public:
    * @}
    */
 
-<<<<<<< HEAD
   /**
    * @defgroup Paxos_h_stash_funcs State values stashing-related functions
    *
@@ -1080,22 +1094,6 @@ public:
    *
    * @{
    */
-  /**
-   * Get the latest version onto stable storage.
-   *
-   * Keeping the latest version on a predefined location makes it easier to
-   * access, since we know we always have the latest version on the same
-   * place.
-   *
-   * @param v the latest version
-   * @param bl the latest version's value
-   */
-=======
-  // if state values are incrementals, it is usefult to keep
-  // the latest copy of the complete structure.
-  void stash_latest(ObjectStore::Transaction *t, version_t v, bufferlist& bl);
->>>>>>> 7867fee... mon: Bundling multiple store operations in one single transaction on the Paxos class.
-  void stash_latest(version_t v, bufferlist& bl);
   /**
    * Get the latest stashed version's value
    *

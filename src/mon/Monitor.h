@@ -131,7 +131,8 @@ private:
 
   // -- local storage --
 public:
-  MonitorObjectStore *ostore;
+  MonitorDBStore *store;
+  const string monitor_db_prefix = "monitor";
 
   // -- monitor state --
 private:
