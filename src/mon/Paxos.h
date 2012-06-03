@@ -1114,6 +1114,15 @@ public:
   /**
    * @}
    */
+ protected:
+  virtual MonitorDBStore *get_store() = 0;
+  virtual int get_rank() = 0;
+  virtual bool is_leader() = 0;
+  virtual bool is_peon() = 0;
+  virtual set<int>& get_quorum() = 0;
+  virtual epoch_t get_epoch() = 0;
+
+  virtual int send_message(Message *m, const entity_inst_t& dest) = 0;
 };
 
 
