@@ -96,7 +96,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorStore *s, Messenger *m, Mo
   timer(cct_, lock),
   logger(NULL), cluster_logger(NULL), cluster_logger_registered(false),
   monmap(map),
-  clog(cct_, messenger, monmap, NULL, LogClient::FLAG_MON),
+  clog(cct_, messenger, monmap, LogClient::FLAG_MON),
   key_server(cct),
   auth_supported(cct),
   store(s),
@@ -297,7 +297,6 @@ void Monitor::init()
 
   // i'm ready!
   messenger->add_dispatcher_tail(this);
-  messenger->add_dispatcher_head(&clog);
   
   // start ticker
   timer.init();
@@ -1501,6 +1500,10 @@ bool Monitor::_ms_dispatch(Message *m)
       // log
     case MSG_LOG:
       paxos_service[PAXOS_LOG]->dispatch((PaxosServiceMessage*)m);
+      break;
+
+    case MSG_LOGACK:
+      clog.handle_log_ack((MLogAck*)m);
       break;
 
       // monmap
