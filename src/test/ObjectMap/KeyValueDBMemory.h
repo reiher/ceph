@@ -28,7 +28,18 @@ public:
 
   int set(
     const string &prefix,
+    const string &key,
+    const bufferlist &bl
+    );
+
+  int set(
+    const string &prefix,
     const std::map<string, bufferlist> &to_set
+    );
+
+  int rmkey(
+    const string &prefix,
+    const string &key
     );
 
   int rmkeys(
@@ -60,6 +71,13 @@ public:
 	db->set(prefix, to_set);
       }
     };
+
+    void set(const string &prefix, const string &k, const bufferlist& bl) {
+      std::map<string, bufferlist> m;
+      m.insert(make_pair(k,bl));
+      set(prefix, m);
+    }
+
     void set(const string &prefix, const std::map<string, bufferlist> &to_set) {
       on_commit.push_back(new SetOp(db, prefix, to_set));
     }
@@ -76,6 +94,13 @@ public:
 	db->rmkeys(prefix, keys);
       }
     };
+
+    void rmkey(const string &prefix, const string &key) {
+      std::set<string> s;
+      s.insert(key);
+      rmkeys(prefix, s);
+    }
+
     void rmkeys(const string &prefix, const std::set<string> &to_remove) {
       on_commit.push_back(new RmKeysOp(db, prefix, to_remove));
     }
