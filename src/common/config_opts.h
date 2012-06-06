@@ -38,6 +38,9 @@ OPTION(pid_file, OPT_STR, "")
 OPTION(chdir, OPT_STR, "/")
 OPTION(max_open_files, OPT_LONGLONG, 0)
 
+OPTION(mon_cluster_log_to_syslog, OPT_BOOL, false)
+OPTION(mon_cluster_log_file, OPT_STR, "/var/log/ceph/$cluster.log")
+
 DEFAULT_SUBSYS(0, 5)
 SUBSYS(lockdep, 0, 5)
 SUBSYS(context, 0, 5)
