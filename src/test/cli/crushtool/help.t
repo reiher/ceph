@@ -23,4 +23,11 @@
                            reweight a given item (and adjust ancestor
                            weights as needed)
      -i mapfn --reweight   recalculate all bucket weights
+     --set-choose-local-tries N
+                           set choose local retries before re-descent
+     --set-choose-local-fallback-tries N
+                           set choose local retries using fallback
+                           permutation before re-descent
+     --set-choose-total-tries N
+                           set choose total descent attempts
   [1]
