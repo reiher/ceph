@@ -368,7 +368,7 @@ int md_config_t::parse_argv(std::vector<const char*>& args)
     else if (ceph_argparse_witharg(args, i, &val, "--bind", (char*)NULL)) {
       set_val_or_die("public_addr", val.c_str());
     }
-    else if (ceph_argparse_witharg(args, i, &val, "--keyfile", "-K", (char*)NULL)) {
+    else if (ceph_argparse_witharg(args, i, &val, "--keyfile", "-K", "--secret", (char*)NULL)) {
       set_val_or_die("keyfile", val.c_str());
     }
     else if (ceph_argparse_witharg(args, i, &val, "--keyring", "-k", (char*)NULL)) {
