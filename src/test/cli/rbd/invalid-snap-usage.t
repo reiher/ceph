@@ -38,8 +38,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd resize img@snap
   error: snapname specified for a command that doesn't use it
@@ -81,8 +81,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd import --snap=snap1 /bin/ls ls
   error: snapname specified for a command that doesn't use it
@@ -124,8 +124,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd create --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -167,8 +167,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd rm --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -210,8 +210,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd rename --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -253,8 +253,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd ls --snap=snap rbd
   error: snapname specified for a command that doesn't use it
@@ -296,8 +296,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd snap ls --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -339,8 +339,8 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]
   $ rbd watch --snap=snap img
   error: snapname specified for a command that doesn't use it
@@ -382,6 +382,6 @@
                                  are (1 << order) bytes. Default is 22 (4 MB).
   
   For the map command:
-    --user <username>            rados user to authenticate as
-    --secret <path>              file containing secret key for use with cephx
+    --id <username>              rados user (without 'client.' prefix) to authenticate as
+    --keyfile <path>             file containing secret key for use with cephx
   [1]

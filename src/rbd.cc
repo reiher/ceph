@@ -16,6 +16,7 @@
 #include "mon/MonMap.h"
 #include "common/config.h"
 
+#include "auth/KeyRing.h"
 #include "common/errno.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
@@ -100,8 +101,8 @@ void usage()
        << "                               are (1 << order) bytes. Default is 22 (4 MB).\n"
        << "\n"
        << "For the map command:\n"
-       << "  --user <username>            rados user to authenticate as\n"
-       << "  --secret <path>              file containing secret key for use with cephx\n";
+       << "  --id <username>              rados user (without 'client.' prefix) to authenticate as\n"
+       << "  --keyfile <path>             file containing secret key for use with cephx\n";
 }
 
 void usage_exit()
@@ -620,9 +621,7 @@ static int do_watch(librados::IoCtx& pp, const char *imgname)
   return 0;
 }
 
-static int do_kernel_add(const char *poolname, const char *imgname,
-			 const char *snapname, const char *secretfile,
-			 const char *user)
+static int do_kernel_add(const char *poolname, const char *imgname, const char *snapname)
 {
   MonMap monmap;
   int r = monmap.build_initial(g_ceph_context, cerr);
@@ -637,26 +636,33 @@ static int do_kernel_add(const char *poolname, const char *imgname,
       oss << ",";
   }
 
+  const char *user = g_conf->name.get_id().c_str();
   oss << " name=" << user;
 
-  char key_name[strlen(user) + strlen("client.")];
+  char key_name[strlen(user) + strlen("client.") + 1];
   snprintf(key_name, sizeof(key_name), "client.%s", user);
-  char secret_buf[MAX_SECRET_LEN];
-  char *secret = NULL;
-  if (secretfile) {
-    r = read_secret_from_file(secretfile, secret_buf, sizeof(secret_buf));
-    if (r < 0)
-      return r;
-    secret = secret_buf;
-  }
 
-  if (secret || is_kernel_secret(key_name)) {
-    char option[MAX_SECRET_LEN + 7];
-    r = get_secret_option(secret, key_name, option, sizeof(option));
-    if (r < 0) {
-      return r;
+  KeyRing keyring;
+  r = keyring.from_ceph_context(g_ceph_context);
+  if (r == -ENOENT && !(g_conf->keyfile.length() ||
+			g_conf->key.length()))
+    r = 0;
+  if (r < 0) {
+    cerr << "failed to get secret: " << cpp_strerror(r) << std::endl;
+    return r;
+  }
+  CryptoKey secret;
+  if (keyring.get_secret(g_conf->name, secret)) {
+    string secret_str;
+    secret.encode_base64(secret_str);
+    if (is_kernel_secret(key_name)) {
+      char option[MAX_SECRET_LEN + 7];
+      r = get_secret_option(secret_str.c_str(), key_name, option, sizeof(option));
+      if (r < 0) {
+	return r;
+      }
+      oss << "," << option;
     }
-    oss << "," << option;
   }
 
   oss << " " << poolname << " " << imgname;
@@ -957,7 +963,7 @@ int main(int argc, const char **argv)
   uint64_t size = 0;  // in bytes
   int order = 0;
   bool old_format = true;
-  const char *imgname = NULL, *snapname = NULL, *destname = NULL, *dest_poolname = NULL, *path = NULL, *secretfile = NULL, *user = NULL, *devpath = NULL;
+  const char *imgname = NULL, *snapname = NULL, *destname = NULL, *dest_poolname = NULL, *path = NULL, *devpath = NULL;
 
   std::string val;
   std::ostringstream err;
@@ -994,10 +1000,6 @@ int main(int argc, const char **argv)
       path = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--dest", (char*)NULL)) {
       destname = strdup(val.c_str());
-    } else if (ceph_argparse_witharg(args, i, &val, "--secret", (char*)NULL)) {
-      secretfile = strdup(val.c_str());
-    } else if (ceph_argparse_witharg(args, i, &val, "--user", (char*)NULL)) {
-      user = strdup(val.c_str());
     } else {
       ++i;
     }
@@ -1064,8 +1066,6 @@ int main(int argc, const char **argv)
 	break;
     }
   }
-  if (!user)
-    user = "admin";
 
   if (opt_cmd == OPT_EXPORT && !imgname) {
     cerr << "error: image name was not specified" << std::endl;
@@ -1356,7 +1356,7 @@ int main(int argc, const char **argv)
     break;
 
   case OPT_MAP:
-    r = do_kernel_add(poolname, imgname, snapname, secretfile, user);
+    r = do_kernel_add(poolname, imgname, snapname);
     if (r < 0) {
       cerr << "add failed: " << cpp_strerror(-r) << std::endl;
       exit(1);
