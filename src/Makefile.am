@@ -71,8 +71,9 @@ endif
 # monitor
 ceph_mon_SOURCES = ceph_mon.cc
 ceph_mon_LDFLAGS = $(AM_LDFLAGS)
-ceph_mon_LDADD = libmon.a $(LIBGLOBAL_LDA)
-ceph_mon_CXXFLAGS = ${AM_CXXFLAGS}
+ceph_mon_LDADD = libmon.a $(LIBOS_LDA) $(LIBGLOBAL_LDA)
+ceph_mon_CXXFLAGS = ${AM_CXXFLAGS} \
+	-I$(top_srcdir)/src/leveldb/include
 bin_PROGRAMS += ceph-mon
 
 # osd
@@ -107,6 +108,8 @@ ceph_CXXFLAGS = ${AM_CXXFLAGS}
 
 ceph_conf_SOURCES = ceph_conf.cc
 ceph_conf_LDADD = $(LIBGLOBAL_LDA)
+ceph_conf_CXXFLAGS = ${AM_CXXFLAGS} \
+	-I$(top_srcdir)/src/leveldb/include
 ceph_authtool_SOURCES = ceph_authtool.cc
 ceph_authtool_LDADD = $(LIBGLOBAL_LDA)
 bin_PROGRAMS += ceph ceph-conf ceph-authtool
@@ -123,7 +126,8 @@ rgw_dencoder_src = rgw/rgw_dencoder.cc \
                    rgw/rgw_acl.cc
 
 ceph_dencoder_SOURCES = test/encoding/ceph_dencoder.cc ${rgw_dencoder_src}
-ceph_dencoder_CXXFLAGS = ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS}
+ceph_dencoder_CXXFLAGS = ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS} \
+	-I$(top_srcdir)/src/leveldb/include
 ceph_dencoder_LDADD = $(LIBGLOBAL_LDA) libosd.a libmds.a $(LIBOS_LDA) libmon.a
 bin_PROGRAMS += ceph-dencoder
 
@@ -1077,8 +1081,9 @@ libmon_a_SOURCES = \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
 	mon/Elector.cc \
-	mon/MonitorStore.cc
-libmon_a_CXXFLAGS= ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS}
+	os/LevelDBStore.cc
+libmon_a_CXXFLAGS= ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS} \
+	-I$(top_srcdir)/src/leveldb/include
 noinst_LIBRARIES += libmon.a
 
 libmds_a_SOURCES = \
@@ -1514,7 +1519,7 @@ noinst_HEADERS = \
         mon/MonClient.h\
         mon/MonMap.h\
         mon/Monitor.h\
-        mon/MonitorStore.h\
+				mon/MonitorDBStore.h\
         mon/OSDMonitor.h\
         mon/PGMap.h\
         mon/PGMonitor.h\
