@@ -217,7 +217,7 @@ int main(int argc, const char **argv)
 
   bufferlist magicbl;
   err = store.get(Monitor::MONITOR_NAME, "magic", magicbl);
-  if (err < 0) {
+  if (!magicbl.length()) {
     cerr << "unable to read magic from mon data.. did you run mkcephfs?" << std::endl;
     exit(1);
   }
