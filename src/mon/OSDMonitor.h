@@ -61,7 +61,7 @@ public:
 private:
   void update_from_paxos();
   void create_pending();  // prepare a new pending
-  void encode_pending(bufferlist &bl);
+  void encode_pending(MonitorDBStore::Transaction *t);
   void on_active();
 
   void share_map_with_random_osd();
@@ -173,7 +173,9 @@ private:
   bool prepare_remove_snaps(class MRemoveSnaps *m);
 
  public:
-  OSDMonitor(Monitor *mn, Paxos *p);
+  OSDMonitor(Monitor *mn, Paxos *p, string service_name)
+  : PaxosService(mn, p, service_name),
+    thrash_map(0), thrash_last_up_osd(-1) { }
 
   void tick();  // check state, take actions
 
