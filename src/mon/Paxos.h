@@ -149,7 +149,6 @@ class Paxos {
 
   // my state machine info
   const string paxos_name;
-  int machine_id;
 
   friend class Monitor;
   friend class PaxosService;
@@ -907,7 +906,6 @@ public:
   Paxos(Monitor *m, const string name) 
 		 : mon(m),
 		   paxos_name(name),
-		   machine_id(PAXOS_MONITOR),
 		   state(STATE_RECOVERING),
 		   first_committed(0),
 		   last_pn(0),
