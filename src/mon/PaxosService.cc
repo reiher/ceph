@@ -19,6 +19,7 @@
 
 
 #include "common/config.h"
+#include "common/Formatter.h"
 
 #define dout_subsys ceph_subsys_paxos
 #undef dout_prefix
@@ -122,6 +123,13 @@ void PaxosService::propose_pending()
   bufferlist bl;
   encode_pending(&t);
   have_pending = false;
+
+  JSONFormatter f;
+  t.dump(&f);
+  dout(20) << __func__ << " transaction dump:\n";
+  f.flush(*_dout);
+  *_dout << dendl;
+  
 
   t.encode(bl);
 
