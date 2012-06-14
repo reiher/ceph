@@ -1108,12 +1108,12 @@ version_t Paxos::get_stashed(bufferlist& bl)
 bool Paxos::is_consistent()
 {
   bool consistent = true;
-  if (first_committed > 1 && first_committed > latest_stashed)
-    consistent = false;
+//  if (first_committed > 1 && first_committed > latest_stashed)
+//    consistent = false;
   if (first_committed > last_committed)
     consistent = false;
-  if (latest_stashed > last_committed)
-    consistent = false;
+//  if (latest_stashed > last_committed)
+//    consistent = false;
   if (slurping != 0)
     consistent = false;
 
