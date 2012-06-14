@@ -23,6 +23,8 @@
 #include "os/KeyValueDB.h"
 #include "os/LevelDBStore.h"
 
+#include "common/Formatter.h"
+
 class MonitorDBStore
 {
   boost::scoped_ptr<LevelDBStore> db;
@@ -88,7 +90,7 @@ class MonitorDBStore
       ops.push_back(Op(OP_ERASE, prefix, key));
     }
 
-    void erase(string prefix, version_t ver) {
+    void erase(string prefix, vers)on_t ver) {
       ostringstream os;
       os << ver;
       erase(prefix, os.str());
@@ -119,6 +121,47 @@ class MonitorDBStore
 
     bool empty() {
       return (ops.size() == 0);
+    }
+
+    void dump(ceph::Formatter *f) {
+      f->open_object_section("transaction");
+      f->open_array_section("ops");
+      list<Op>::iterator it;
+      int op_num = 0;
+      for (it = ops.begin(); it != ops.end(); ++it) {
+	Op& op = *it;
+	f->open_object_section("op");
+	f->dump_int("op_num", op_num++);
+	switch (op.type) {
+	case OP_PUT:
+	  {
+	    f->dump_string("type", "PUT");
+	    f->dump_string("prefix", op.prefix);
+	    f->dump_string("key", op.key);
+	    ostream os;
+	    op.bl.hexdump(os);
+	    f->dump_unsigned("length", op.bl.length());
+	    f->dump_string("bl", os.str());
+	  }
+	  break;
+	case OP_ERASE:
+	  {
+	    f->dump_string("type", "ERASE");
+	    f->dump_string("prefix", op.prefix);
+	    f->dump_string("key", op.key);
+	  }
+	  break;
+	default:
+	  {
+	    f->dump_string("type", "unknown");
+	    f->dump_unsigned("op_code", op.type);
+	    break;
+	  }
+	}
+	f->close_section();
+      }
+      f->close_section();
+      f->close_section();
     }
   };
 
