@@ -95,7 +95,7 @@ namespace librbd {
     }
 
     int get_features(librados::IoCtx *ioctx, const std::string &oid,
-		     uint64_t snap_id, uint64_t *features)
+		     snapid_t snap_id, uint64_t *features)
     {
       bufferlist inbl, outbl;
       ::encode(snap_id, inbl);
@@ -133,7 +133,7 @@ namespace librbd {
     }
 
     int get_size(librados::IoCtx *ioctx, const std::string &oid,
-		 uint64_t snap_id, uint64_t *size, uint8_t *order)
+		 snapid_t snap_id, uint64_t *size, uint8_t *order)
     {
       bufferlist inbl, outbl;
       ::encode(snap_id, inbl);
@@ -163,7 +163,7 @@ namespace librbd {
     }
 
     int snapshot_add(librados::IoCtx *ioctx, const std::string &oid,
-		     uint64_t snap_id, const std::string &snap_name)
+		     snapid_t snap_id, const std::string &snap_name)
     {
       bufferlist bl, bl2;
       ::encode(snap_name, bl);
@@ -173,7 +173,7 @@ namespace librbd {
     }
 
     int snapshot_remove(librados::IoCtx *ioctx, const std::string &oid,
-			uint64_t snap_id)
+			snapid_t snap_id)
     {
       bufferlist bl, bl2;
       ::encode(snap_id, bl);
