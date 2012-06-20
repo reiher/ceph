@@ -4121,6 +4121,7 @@ boost::statechart::result PG::RecoveryState::Active::react(const AdvMap& advmap)
     dout(10) << *pg << " snap_trimq now " << pg->snap_trimq << dendl;
     pg->dirty_info = true;
   }
+  pg->check_recovery_sources(pg->get_osdmap());
   return forward_event();
 }
     
@@ -4131,8 +4132,7 @@ boost::statechart::result PG::RecoveryState::Active::react(const ActMap&)
   assert(pg->is_active());
   assert(pg->is_primary());
 
-  if (pg->check_recovery_sources(pg->get_osdmap()) &&
-      pg->have_unfound()) {
+  if (pg->have_unfound()) {
     // object may have become unfound
     pg->discover_all_missing(*context< RecoveryMachine >().get_query_map());
   }
