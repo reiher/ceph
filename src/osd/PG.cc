@@ -331,6 +331,14 @@ bool PG::merge_old_entry(ObjectStore::Transaction& t, pg_log_entry_t& oe)
 	missing.revise_need(ne.soid, ne.version);
       }
     }
+  } else if (oe.prior_version > info.log_tail) {
+    assert(oe.soid.snap != CEPH_NOSNAP);
+    dout(20) << "merge_old_entry  had " << oe
+	     << ", clone with no non-divergent log entries, "
+	     << "deleting" << dendl;
+    t.remove(coll, oe.soid);
+    if (missing.is_missing(oe.soid))
+      missing.rm(oe.soid, missing.missing[oe.soid].need);
   } else {
     if (!oe.is_delete()) {
       dout(20) << "merge_old_entry  had " << oe << " deleting" << dendl;
@@ -341,7 +349,6 @@ bool PG::merge_old_entry(ObjectStore::Transaction& t, pg_log_entry_t& oe)
     if (oe.prior_version > eversion_t()) {
       if (!missing.is_missing(oe.soid) ||
 	  missing.missing[oe.soid].need > info.log_tail) {
-	assert(oe.prior_version < info.log_tail);
 	missing.revise_need(oe.soid, oe.prior_version);
       }
     } else if (missing.is_missing(oe.soid)) {
