@@ -63,6 +63,9 @@ int CephxServiceHandler::handle_request(bufferlist::iterator& indata, bufferlist
       CryptoKey secret;
       if (!key_server->get_secret(entity_name, secret)) {
         ldout(cct, 0) << "couldn't find entity name: " << entity_name << dendl;
+	stringstream ss;
+	key_server->list_secrets(ss);
+	ldout(cct, 0) << "available secrets:\n" << ss.str() << dendl;
 	ret = -EPERM;
 	break;
       }
