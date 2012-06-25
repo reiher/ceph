@@ -424,6 +424,8 @@ public:
     return (!is_proposing() && !paxos->is_recovering());
   }
 
+  void _waiting();
+
   /**
    * TODO: FIXME: Most of this is no longer valid. Rework it. Seriously. I just
    * TODO: FIXME: don't have the time right now.
@@ -484,6 +486,7 @@ public:
   }
 
   void wait_for_active(Context *c) {
+    _waiting();
     if (is_proposing())
       wait_for_finished_proposal(c);
     else
@@ -491,6 +494,7 @@ public:
   }
 
   void wait_for_readable(Context *c, version_t ver = 0) {
+    _waiting();
     /* This is somewhat of a hack. We only do check if a version is readable on
      * PaxosService::dispatch(), but, nonetheless, we must make sure that if that
      * is why we are not readable, then we must wait on PaxosService and not on
@@ -505,6 +509,7 @@ public:
   }
 
   void wait_for_writeable(Context *c) {
+    _waiting();
     if (is_proposing())
       wait_for_finished_proposal(c);
     else

@@ -30,6 +30,13 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, Paxos *paxos, string 
 		<< ").paxosservice(" << service_name << ") ";
 }
 
+void PaxosService::_waiting()
+{
+  dout(0) << __func__ << " pending proposals:\n";
+  paxos->list_proposals(*_dout);
+  *_dout << dendl;
+}
+
 bool PaxosService::is_readable(version_t ver)
 {
   if (ver > get_last_committed()) {
