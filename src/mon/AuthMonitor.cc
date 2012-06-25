@@ -193,7 +193,12 @@ void AuthMonitor::update_from_paxos()
 
   dout(10) << "update_from_paxos() last_allocated_id=" << last_allocated_id
 	   << " max_global_id=" << max_global_id << dendl;
- 
+
+  stringstream ss;
+  mon->key_server.list_secrets(ss);
+  dout(10) << __func__ << " secrets v " << version << ":\n"
+	   << ss.str() << dendl;
+
   /*
   bufferlist bl;
   __u8 v = 1;
