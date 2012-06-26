@@ -217,7 +217,22 @@ public:
   }
 
 
-  map<string,string> get_loc(int id);
+  /*
+   * returns the (type, name) of the parent bucket of id
+   */
+  map<string,string>  get_loc(int id);
+
+  /*
+   *  returns the (type,name) of all parent buckets between id
+   *  and default
+   */
+  map<string, string> get_full_location(int id);
+
+  /*
+   *  returns (type_id, type) of all parent buckets between id and
+   *  default, can be used to check for anomolous CRUSH maps
+   */
+  map<int, string> get_parent_hierarchy(int id);
 
 
   /**
@@ -283,6 +298,15 @@ public:
 
   /// check if item id is present in the map hierarchy
   bool check_item_present(int id);
+
+
+  /// get the parent bucket ID and position of an ID in the map hierarchy
+  vector<int> get_item_location(int id);
+
+
+  /// swap two items in the map hierarchy
+  ///int swap_item(CephContext *cct, int old_id, int new_id); //duplicate REMOVEME
+
 
 
   /*** devices ***/
