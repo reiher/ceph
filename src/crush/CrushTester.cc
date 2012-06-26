@@ -185,8 +185,8 @@ int CrushTester::test()
 #endif
       
       // create a map to hold batch-level placement information
-      map<int, vector<int> > batchPer; 
-      vector <float> deviceTestChi (per.size() );
+      map<int, vector<int> > batch_per;
+      vector <float> device_test_chi (per.size() );
       
       int objects_per_batch = num_objects / num_batches;
       
@@ -234,8 +234,8 @@ int CrushTester::test()
         num_objects_expected[i] = (proportional_weights[i]*expected_objects);
 
 
-      for (int currentBatch = 0; currentBatch < num_batches; currentBatch++) {
-        if (currentBatch == (num_batches - 1)) {
+      for (int current_batch = 0; current_batch < num_batches; current_batch++) {
+        if (current_batch == (num_batches - 1)) {
           batch_max = max_x;
           objects_per_batch = (batch_max - batch_min + 1);
         }
@@ -278,7 +278,7 @@ int CrushTester::test()
             temporary_per[out[i]]++;
           }
 
-          batchPer[currentBatch] = temporary_per;
+          batch_per[current_batch] = temporary_per;
           sizes[out.size()]++;
 
           if (output_bad_mappings && out.size() != (unsigned)nr) {
@@ -288,7 +288,7 @@ int CrushTester::test()
 
         // compute chi squared statistic for device examining the uniformity this batch of placements
 	for (unsigned i = 0; i < per.size(); i++)
-	  deviceTestChi[i] += pow( (temporary_per[i] - batch_num_objects_expected[i]), 2) /
+	  device_test_chi[i] += pow( (temporary_per[i] - batch_num_objects_expected[i]), 2) /
 	    batch_num_objects_expected[i];
 
 	batch_min = batch_max + 1;
@@ -317,9 +317,9 @@ int CrushTester::test()
       int num_devices_failing_at_one_percent = 0;
       
       for (unsigned i = 0; i < per.size(); i++) {
-        if (deviceTestChi[i] > batch_chi_statistic_five_percent)
+        if (device_test_chi[i] > batch_chi_statistic_five_percent)
           num_devices_failing_at_five_percent++;
-        if (deviceTestChi[i] > batch_chi_statistic_one_percent)
+        if (device_test_chi[i] > batch_chi_statistic_one_percent)
           num_devices_failing_at_one_percent++;
       }
 #endif      
@@ -332,7 +332,7 @@ int CrushTester::test()
                   << "\t" << " stored " << ": " << per[i]
                   << "\t" << " expected " << ": " << num_objects_expected[i]
 #ifdef HAVE_BOOST_RANDOM_DISCRETE_DISTRIBUTION
-                  << "\t" << " X^2 " << ": " << deviceTestChi[i]
+                  << "\t" << " X^2 " << ": " << device_test_chi[i]
                   << "\t" << " critical (5% confidence) " << ": " << batch_chi_statistic_five_percent
                   << "\t" << " (1% confidence) " << ": " << batch_chi_statistic_one_percent
 #endif
@@ -343,7 +343,7 @@ int CrushTester::test()
                 << "\t" << " stored " << ": " << per[i]
                 << "\t" << " expected " << ": " << num_objects_expected[i]
 #ifdef HAVE_BOOST_RANDOM_DISCRETE_DISTRIBUTION
-                << "\t" << " X^2 " << ": " << deviceTestChi[i]
+                << "\t" << " X^2 " << ": " << device_test_chi[i]
                 << "\t" << " critical X^2 (5% confidence) " << ": " << batch_chi_statistic_five_percent
                 << "\t" << " (1% confidence) " << ": " << batch_chi_statistic_one_percent
 #endif
