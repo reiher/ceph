@@ -1270,6 +1270,9 @@ void OSDMonitor::check_sub(Subscription *sub)
     else
       sub->next = osdmap.get_epoch() + 1;
   }
+  else
+    dout(5) << __func__ << " osdmap epoch " << osdmap.get_epoch()
+	    << " requested " << sub->next << dendl;
 }
 
 // TICK
