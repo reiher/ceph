@@ -2621,9 +2621,19 @@ void PG::sub_op_scrub_map(OpRequestRef op)
     scrub_received_maps[from].decode(p);
   }
 
-  if (--scrub_waiting_on == 0) {
-    assert(last_update_applied == info.last_update);
-    osd->scrub_finalize_wq.queue(this);
+  --scrub_waiting_on;
+  if (scrub_waiting_on == 0) {
+    if (finalizing_scrub) { // incremental lists received
+      osd->scrub_finalize_wq.queue(this);
+    } else {                // initial lists received
+      scrub_block_writes = true;
+      if (last_update_applied == info.last_update) {
+        finalizing_scrub = true;
+        scrub_gather_replica_maps();
+        ++scrub_waiting_on;
+        osd->scrub_wq.queue(this);
+      }
+    }
   }
 }
 
@@ -2956,8 +2966,9 @@ void PG::replica_scrub(MOSDRepScrub *msg)
  * PG_STATE_SCRUBBING is set when the scrub is queued
  * 
  * Once the initial scrub has completed and the requests have gone out to 
- * replicas for maps, finalizing_scrub is set.  scrub_waiting_on is set to 
- * the number of maps outstanding (active.size()).
+ * replicas for maps, we set scrub_active and wait for the replicas to
+ * complete their maps. Once the maps are received, scrub_block_writes is set.
+ * scrub_waiting_on is set to the number of maps outstanding (active.size()).
  *
  * If last_update_applied is behind the head of the log, scrub returns to be
  * requeued by op_applied.
@@ -2989,8 +3000,10 @@ void PG::scrub()
     return;
   }
 
-  if (!finalizing_scrub) {
+  if (!scrub_active) {
     dout(10) << "scrub start" << dendl;
+    scrub_active = true;
+
     update_stats();
     scrub_received_maps.clear();
     scrub_epoch_start = info.history.same_interval_since;
@@ -3028,18 +3041,35 @@ void PG::scrub()
       return;
     }
 
-    finalizing_scrub = true;
+    --scrub_waiting_on;
+
+    if (scrub_waiting_on == 0) {
+      // the replicas have completed their scrub map, so lock out writes
+      scrub_block_writes = true;
+    } else {
+      dout(10) << "wait for replicas to build initial scrub map" << dendl;
+      unlock();
+      return;
+    }
+
     if (last_update_applied != info.last_update) {
       dout(10) << "wait for cleanup" << dendl;
       unlock();
       return;
     }
+
+    // fall through if last_update_applied == info.last_update and scrub_waiting_on == 0
+
+    // request incrementals from replicas
+    scrub_gather_replica_maps();
+    ++scrub_waiting_on;
   }
     
-
   dout(10) << "clean up scrub" << dendl;
   assert(last_update_applied == info.last_update);
-  
+
+  finalizing_scrub = true;
+
   if (scrub_epoch_start != info.history.same_interval_since) {
     dout(10) << "scrub  pg changed, aborting" << dendl;
     scrub_clear_state();
@@ -3076,6 +3106,8 @@ void PG::scrub_clear_state()
   osd->requeue_ops(this, waiting_for_active);
 
   finalizing_scrub = false;
+  scrub_block_writes = false;
+  scrub_active = false;
   if (active_rep_scrub) {
     active_rep_scrub->put();
     active_rep_scrub = NULL;
