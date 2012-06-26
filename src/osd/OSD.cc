@@ -2065,6 +2065,12 @@ void OSD::_got_boot_version(epoch_t oldest, epoch_t newest)
     send_boot();
     return;
   }
+  else {
+    dout(5) << __func__ << " not sending boot message:"
+	    << " osdmap e " << osdmap->get_epoch()
+	    << " oldest " << oldest << " newest " << newest
+	    << " osd_map_message_max " << g_conf->osd_map_message_max << dendl;
+  }
   
   // get all the latest maps
   if (osdmap->get_epoch() > oldest)
