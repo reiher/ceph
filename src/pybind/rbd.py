@@ -332,6 +332,10 @@ class Image(object):
     def __del__(self):
         self.close()
 
+    def __str__(self):
+        s = "rbd.Image(" + dict.__repr__(self.__dict__) + ")"
+        return s
+
     def resize(self, size):
         """
         Change the size of the image.
