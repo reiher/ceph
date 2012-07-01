@@ -95,21 +95,25 @@ int MonitorStore::umount()
 
 int MonitorStore::mkfs()
 {
-  std::string ret = run_cmd("rm", "-rf", dir.c_str(), (char*)NULL);
-  if (!ret.empty()) {
-    derr << "MonitorStore::mkfs: failed to remove " << dir
-	 << ": rm returned " << ret << dendl;
-    return -EIO;
+  int err = 0;
+  int fd = ::open(dir.c_str(), O_RDONLY);
+  if (fd < 0)
+    err = -errno;
+  else
+    ::close(fd);
+
+  if (err == -ENOENT) {
+    err = ::mkdir(dir.c_str(), 0700);
+    if (err < 0)
+      err = -errno;
   }
 
-  ret = run_cmd("mkdir", "-p", dir.c_str(), (char*)NULL);
-  if (!ret.empty()) {
-    derr << "MonitorStore::mkfs: failed to mkdir -p " << dir
-	 << ": mkdir returned " << ret << dendl;
-    return -EIO;
+  if (err < 0) {
+    derr << "MonitorStore::mkfs: unable to open or create " << dir << ": " << cpp_strerror(err) << dendl;
+    return -err;
   }
 
-  dout(0) << "created monfs at " << dir.c_str() << " for "
+  dout(0) << "created monfs at " << dir << " for "
 	  << g_conf->name.get_id() << dendl;
   return 0;
 }
