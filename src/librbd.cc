@@ -174,9 +174,9 @@ namespace librbd {
     uint64_t features;
     string object_prefix;
     string header_oid;
-    string parent_poolname;
+    int64_t parent_poolid;
     string parent_name;
-    string parent_snapname;
+    snapid_t parent_snapid;
     uint64_t overlap;
 
     ObjectCacher *object_cacher;
@@ -196,7 +196,8 @@ namespace librbd {
 	lock("librbd::ImageCtx::lock"),
 	cache_lock("librbd::ImageCtx::cache_lock"),
 	old_format(true),
-	order(0), size(0), features(0),
+	order(0), size(0), features(0), parent_poolid(-1),
+	parent_snapid(CEPH_NOSNAP), overlap(0),
 	object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
     {
       md_ctx.dup(p);
@@ -1105,7 +1106,7 @@ int clone(IoCtx& p_ioctx, const char *p_name, const char *p_snapname,
   ImageCtx *p_imctx = new ImageCtx(p_name, p_snapname, p_ioctx);
   r = open_image(p_imctx);
   if (r < 0) {
-    ldout(cct, 2) << "error opening parent image: "
+    lderr(cct) << "error opening parent image: "
       << cpp_strerror(-r) << dendl;
     return r;
   }
@@ -1278,6 +1279,7 @@ int get_old_format(ImageCtx *ictx, uint8_t *old)
   int r = ictx_check(ictx);
   if (r < 0)
     return r;
+  Mutex::Locker(ictx->lock);
   *old = ictx->old_format;
   return 0;
 }
@@ -1287,6 +1289,7 @@ int get_features(ImageCtx *ictx, uint64_t *features)
   int r = ictx_check(ictx);
   if (r < 0)
     return r;
+  Mutex::Locker(ictx->lock);
   *features = ictx->features;
   return 0;
 }
@@ -1296,6 +1299,7 @@ int get_overlap(ImageCtx *ictx, uint64_t *overlap)
   int r = ictx_check(ictx);
   if (r < 0)
     return r;
+  Mutex::Locker(ictx->lock);
   *overlap = ictx->overlap;
   return 0;
 }
@@ -1306,9 +1310,16 @@ int get_parent_info(ImageCtx *ictx, string *parent_poolname,
   int r = ictx_check(ictx);
   if (r < 0)
     return r;
-  *parent_poolname = ictx->parent_poolname;
+  Mutex::Locker(ictx->lock);
+  ostringstream oss;
+  // XXX replace with real poolname lookup
+  oss << "ID:" << ictx->parent_poolid;
+  *parent_poolname = oss.str();
+  oss.seekp(0);
   *parent_name = ictx->parent_name;
-  *parent_snapname = ictx->parent_snapname;
+  // XXX replace with real snapname lookup
+  oss << "ID:" << ictx->parent_snapid;
+  *parent_snapname = oss.str();
   return 0;
 }
 
@@ -1563,28 +1574,18 @@ int ictx_refresh(ImageCtx *ictx)
 	return -ENOSYS;
       }
 
-      int64_t p_poolid;
-      uint64_t p_size;
-      std::string p_name;
-      snapid_t p_snapid;
-
+      // what get_parent calls size, we call overlap
       r = cls_client::get_parent(&(ictx->md_ctx), ictx->header_oid,
-				 ictx->snapid, &p_poolid, &p_name,
-				 &p_snapid, &p_size);
+				 ictx->snapid, &ictx->parent_poolid,
+				 &ictx->parent_name, &ictx->parent_snapid,
+				 &ictx->overlap);
       if (r < 0) {
-	// XXX map poolid to poolname here
-	std::ostringstream oss;
-	oss << "ID:" << p_poolid;
-	ictx->parent_poolname = oss.str();
-
-	ictx->parent_name = p_name;
-
-	// XXX map snapid to snapname here
-	oss.str("");
-	oss << "ID:" << p_snapid;
-	ictx->parent_snapname = oss.str();
-
-	ictx->overlap = p_size;
+	if (r == -ENOENT) {
+	  // no parent, make sure sentinel value is set
+	  ictx->parent_poolid = -1;
+	} else {
+	  return r;
+	}
       }
 
       r = cls_client::snapshot_list(&(ictx->md_ctx), ictx->header_oid,

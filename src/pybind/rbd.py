@@ -307,7 +307,7 @@ class Image(object):
                                    byref(self.image), c_char_p(snapshot))
         if ret != 0:
             raise make_ex(ret, 'error opening image %s at snapshot %s' % (name, snapshot))
-	self.closed = False
+        self.closed = False
 
     def __enter__(self):
         return self
@@ -388,11 +388,17 @@ class Image(object):
             }
 
     def parent_info(self):
-        pool = create_string_buffer(RBD_MAX_POOL_NAME_SIZE)
-        name = create_string_buffer(RBD_MAX_IMAGE_NAME_SIZE)
-        snapname = create_string_buffer(RBD_MAX_IMAGE_NAME_SIZE)
-        ret = self.librbd.rbd_get_parent_info(self.image, pool, len(pool), 
-            name, len(name), snapname, len(snapname))
+        ret = -errno.ERANGE
+        size = 8;
+        while ret == -errno.ERANGE and size < 128:
+            pool = create_string_buffer(size)
+            name = create_string_buffer(size)
+            snapname = create_string_buffer(size)
+            ret = self.librbd.rbd_get_parent_info(self.image, pool, len(pool), 
+                name, len(name), snapname, len(snapname))
+            if ret == -errno.ERANGE:
+                size *= 2;
+
         if (ret != 0):
             raise make_ex(ret, 'error getting parent info for image' % (self.name))
         return (pool.value, name.value, snapname.value)
