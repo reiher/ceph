@@ -677,6 +677,38 @@ namespace librbd {
     return c;
   }
 
+ProgressContext::~ProgressContext()
+{
+}
+
+class NoOpProgressContext : public librbd::ProgressContext
+{
+public:
+  NoOpProgressContext()
+  {
+  }
+  int update_progress(uint64_t offset, uint64_t src_size)
+  {
+    return 0;
+  }
+};
+
+class CProgressContext : public librbd::ProgressContext
+{
+public:
+  CProgressContext(librbd_progress_fn_t fn, void *data)
+    : m_fn(fn), m_data(data)
+  {
+  }
+  int update_progress(uint64_t offset, uint64_t src_size)
+  {
+    return m_fn(offset, src_size, m_data);
+  }
+private:
+  librbd_progress_fn_t m_fn;
+  void *m_data;
+};
+
 void WatchCtx::invalidate()
 {
   Mutex::Locker l(lock);
@@ -1182,65 +1214,53 @@ int clone(IoCtx& p_ioctx, const char *p_name, const char *p_snapname,
     return -EINVAL;
   }
 
-  uint8_t order;
+  int order = *c_order;
 
-  if (*c_order) {
-    if ((*c_order > 255) || (*c_order < 12)) {
-      lderr(cct) << "order must be in the range [12, 255]" << dendl;
-      return -EDOM;
-    } else {
-      order = *c_order;
-    }
-  } else {
+  if (!*c_order) {
     order = p_imctx->order;
   }
 
-  uint64_t bid;
-  string dir_info = RBD_INFO;
-  r = rbd_assign_bid(c_ioctx, dir_info, &bid);
+  uint64_t size = p_imctx->get_image_size();
+  int remove_r;
+  librbd::NoOpProgressContext no_op;
+  ImageCtx *c_imctx = NULL;
+  r = create(c_ioctx, c_name, size, false, features, &order);
   if (r < 0) {
-    lderr(cct) << "failed to assign a block name for image" << dendl;
-    close_image(p_imctx);
-    return r;
-  }
-
-  ldout(cct, 2) << "adding rbd image to directory..." << dendl;
-  r = tmap_set(c_ioctx, c_name);
-  if (r < 0) {
-    lderr(cct) << "error adding img to directory: " << cpp_strerror(r)<< dendl;
-    close_image(p_imctx);
-    return r;
-  }
-
-  // new format header_oid only
-  string header_oid = id_obj_name(c_name);
-  ostringstream obj_prefix;
-  obj_prefix << RBD_DATA_PREFIX << std::hex << bid;
-  string prefix = obj_prefix.str();
-  r = cls_client::create_image(&c_ioctx, header_oid, p_imctx->size, order,
-			       features, prefix);
-  if (r < 0) {
-    lderr(cct) << "error writing header: " << cpp_strerror(r) << dendl;
-    tmap_rm(c_ioctx, c_name);
-    close_image(p_imctx);
-    return r;
+    lderr(cct) << "error creating child: " << cpp_strerror(r) << dendl;
+    goto err_close_parent;
   }
 
   uint64_t p_poolid;
   p_poolid = p_ioctx.get_id();
 
-  r = cls_client::set_parent(&c_ioctx, header_oid, p_poolid, p_name,
-			     p_imctx->snapid, p_imctx->size);
+  c_imctx = new ImageCtx(c_name, NULL, c_ioctx);
+  r = open_image(c_imctx);
+  if (r < 0) {
+    lderr(cct) << "Error opening new image: " << cpp_strerror(r) << dendl;
+    goto err_remove;
+  }
+
+  r = cls_client::set_parent(&c_ioctx, c_imctx->header_oid, p_poolid,
+			     p_imctx->id, p_imctx->snapid, size);
   if (r < 0) {
     lderr(cct) << "couldn't set parent: " << r << dendl;
-    c_ioctx.remove(header_oid);
-    tmap_rm(c_ioctx, c_name);
-    close_image(p_imctx);
-    return r;
+    goto err_close_child;
   }
   ldout(cct, 2) << "done." << dendl;
   close_image(p_imctx);
   return 0;
+
+ err_close_child:
+  close_image(c_imctx);
+ err_remove:
+  remove_r = remove(c_ioctx, c_name, no_op);
+  if (remove_r < 0) {
+    lderr(cct) << "Error removing failed clone: "
+	       << cpp_strerror(remove_r) << dendl;
+  }
+ err_close_parent:
+  close_image(p_imctx);
+  return r;
 }
 
 int rename(IoCtx& io_ctx, const char *srcname, const char *dstname)
@@ -1767,38 +1787,6 @@ int ictx_refresh(ImageCtx *ictx)
 
   return 0;
 }
-
-ProgressContext::~ProgressContext()
-{
-}
-
-class NoOpProgressContext : public librbd::ProgressContext
-{
-public:
-  NoOpProgressContext()
-  {
-  }
-  int update_progress(uint64_t offset, uint64_t src_size)
-  {
-    return 0;
-  }
-};
-
-class CProgressContext : public librbd::ProgressContext
-{
-public:
-  CProgressContext(librbd_progress_fn_t fn, void *data)
-    : m_fn(fn), m_data(data)
-  {
-  }
-  int update_progress(uint64_t offset, uint64_t src_size)
-  {
-    return m_fn(offset, src_size, m_data);
-  }
-private:
-  librbd_progress_fn_t m_fn;
-  void *m_data;
-};
 
 int snap_rollback(ImageCtx *ictx, const char *snap_name, ProgressContext& prog_ctx)
 {
