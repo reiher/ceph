@@ -21,13 +21,9 @@ import ctypes
 import errno
 
 ANONYMOUS_AUID = 0xffffffffffffffff
-ADMIN_AUID = 0
+DMIN_AUID = 0
 
 RBD_FEATURE_LAYERING = 1
-RBD_MAX_IMAGE_NAME_SIZE = 96
-RBD_MAX_IMAGE_SNAPNAME_SIZE = 96
-RBD_MAX_POOL_NAME_SIZE = 96
-RBD_MAX_BLOCK_NAME_SIZE = 24
 
 class Error(Exception):
     pass
