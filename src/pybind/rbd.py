@@ -21,7 +21,7 @@ import ctypes
 import errno
 
 ANONYMOUS_AUID = 0xffffffffffffffff
-DMIN_AUID = 0
+ADMIN_AUID = 0
 
 RBD_FEATURE_LAYERING = 1
 
