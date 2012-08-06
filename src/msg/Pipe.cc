@@ -1593,6 +1593,14 @@ int Pipe::read_message(Message **pm)
     //PLRDEBUG
 #if 0
 	// Return failure if signature does not match.  Once code works, put this back in.  PLR
+
+	// In the long term, we can probably just return failure and print a message to the
+	// log when there are a small number of signature failures.  If there are a large
+	// number, though, it's either a serious bug or a legitimate attempt to attack the
+	// system.  So we should either count failures and raise a stronger signal when too
+	// many occur, or have some code automatically parsing the log looking for frequent
+	// signature failures.  PLR
+
         ret = -EINVAL;
         goto out_dethrottle;
 #endif
